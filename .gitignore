@@ -1,0 +1,8 @@
+.pdf
+.xlsx
+.env
+
+data/
+venv/
+cookies/
+drivers/
