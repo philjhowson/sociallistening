@@ -1,8 +1,10 @@
-.pdf
-.xlsx
+*.pdf
+*.xlsx
 .env
 
 data/
 venv/
 cookies/
 drivers/
+
+!src/data/
