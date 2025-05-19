@@ -1,6 +1,8 @@
 *.pdf
 *.xlsx
+platforms.txt
 .env
+*.pyc
 
 data/
 venv/
