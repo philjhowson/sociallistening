@@ -1,10 +1,13 @@
-from dotenv import find_dotenv
+from dotenv import load_dotenv
+from shared_functions import safe_loader, safe_saver
+import time
 import argparse
 import os
 import praw
 import pandas as pd
 
-def reddit_scrape(subreddit = 'AppleWatch', search_term = 'warranty'):
+def reddit_scrape(subreddit = None, search_term = None,
+                  limit = 2000, comments = 50):
 
     """
     This loads in private information from a .env file that contains
@@ -27,102 +30,202 @@ def reddit_scrape(subreddit = 'AppleWatch', search_term = 'warranty'):
     )
 
     """
-    The search term is set by the arguments passed when the script is
-    run, otherwise, it defaults to '/rAppleWatch' subreddit with a
-    search for 'warranty'. LIMIT_POST sets the maximum number of posts
-    that will be scraped and LIMIT_COMMENTS sets the maximum number of
-    replies that will be scrapped.
+    allow 18+ content, so that reddits like 'iqos' can
+    be accessed.
     """
 
-    SUBREDDIT = subreddit
-    SEARCH_TERM = search_term
-    LIMIT_POSTS = 1000
-    LIMIT_COMMENTS = 50
+    reddit.config._allow_nsfw = True
 
     """
-    Initialize an empty list to store all the extracted information
-    for later conversion to a dataframe.
+
     """
 
-    data = []
+    path_to_subreddits = 'data/raw/reddit_subreddits.pkl'
+
+    if os.path.exists(path_to_subreddits):
+        all_subreddits = safe_loader(path_to_subreddits)
+        if not isinstance(all_subreddits, set):
+            all_subreddits = set(subreddit)
+
+    else:
+        all_subreddits = set()
+
+    if not subreddit:
+
+        if all_subreddits:
+            subreddit = all_subreddits
+        
+        else:
+            print(f"❗❗❗ Error! List of subreddits not found at {path_to_subreddits}."
+                  f"If the file exists elsewhere, move it to the correct folder, change "
+                  f"path in the source file, or manually specify a subreddit to search.")
+
+            return None
+
+    else:
+        subreddit = [subreddit]
+
+        if subreddit[0] not in all_subreddits:
+            all_subreddits.add(subreddit[0])
+            safe_saver(all_subreddits, path_to_subreddits)
+
+    path_to_search_terms = 'data/raw/reddit_search_terms.pkl'
+
+    if os.path.exists(path_to_search_terms):
+        all_search_terms = safe_loader(path_to_search_terms)
+        if not isinstance(all_search_terms, set):
+            all_search_terms = set(subreddit)
+
+    else:
+        all_search_terms = set()
+
+    if not search_term:
+
+        search_term = all_search_terms
+
+    else:
+        search_term = [search_term]
+
+        if search_term[0] not in all_search_terms:
+            all_search_terms.add(search_term[0])
+            safe_saver(all_search_terms, path_to_search_terms)
 
     """
     sorts through each post, under the defined subreddit, with the defined
     search term
     """
-    for post in reddit.subreddit(SUBREDDIT).search(SEARCH_TERM,
-                                                   limit = LIMIT_POSTS):
-        """
-        this specifies how many 'more comments' the API will attempt to
-        load. 0 means that the script will attempt to retrieve all comments.
-        1 means it will retreive the more comments 1 time.
-        """
-        post.comments.replace_more(limit = 0)
 
-        """
-        loops through the specified number of comments, which you
-        can find the variable above. It then initializes an empty
-        list of replies, then it goes over the comments on the each
-        reply in the same way, thus creating a series of comments
-        and replies. Critical information that is extracted:
+    path_to_cache = 'data/raw/reddit_cache.pkl'
 
-        post.id = the id for the post
-        post.title = the title of the post
-        post.url = the webaddress of the post
-        post.score = the upvotes for the post - the number of downvotes
-        post.created_utc = UTC timestamp for post creation
-        post.author = username of poster
-        post.selftext = the body of the comment, if empty it is a link/image/video etc.
-        top_comment.id = comment identifier
-        top_comment.author = author of the comment
-        top_comment.created_utc = the time the comment was posted
-        replies_text = a list of replies to the comment.
-        """
-        for top_comment in post.comments[:LIMIT_COMMENTS]:
-            replies_text = []
-            for reply in top_comment.replies[:LIMIT_COMMENTS]:
-                replies_text.append(reply.body)
-            
-            data.append({
-                'post_id': post.id,
-                'post_title': post.title,
-                'post_url': post.url,
-                'post_score': post.score,
-                'post_created_utc': post.created_utc,
-                'post_author': str(post.author),
-                'post_body': post.selftext,
-                'comment_id': top_comment.id,
-                'comment_author': str(top_comment.author),
-                'comment_body': top_comment.body,
-                'comment_score': top_comment.score,
-                'comment_created_utc': top_comment.created_utc,
-                'replies': replies_text
-            })
+    if os.path.exists(path_to_cache):
+        cache = safe_loader(path_to_cache)
 
-    data = pd.DataFrame(data)
+    else:
+        cache = set()
 
-    print(data.head(10))
+    data = pd.DataFrame()
 
-    data.to_json(orient = 'records')
-    
+    for sub in subreddit:
+
+        for term in search_term:
+            data = []
+            max_retries = 4
+
+            for attempt in range(max_retries):
+                try:
+                    for post in reddit.subreddit(sub).search(term, sort = 'relevance',
+                                                             limit = limit):
+
+                        if post.id in cache:
+                            continue
+
+                        cache.add(post.id)
+                        
+                        time.sleep(1)
+
+                        post.comments.replace_more(limit = 0)
+
+                        for top_comment in post.comments[:comments]:
+                            replies_data = []
+                            comments = 1
+                            for reply in top_comment.replies[:comments]:
+                                replies_data.append({
+                                    'reply_id': reply.id,
+                                    'reply_author': str(reply.author),
+                                    'reply_body': reply.body,
+                                    'reply_score': reply.score,
+                                    'reply_created_utc': reply.created_utc
+                                })
+
+                                comments += 1
+
+                            data.append({
+                                'post_id' : post.id,
+                                'post_title' : post.title,
+                                'post_url' : post.url,
+                                'post_score' : post.score,
+                                'post_created_utc' : post.created_utc,
+                                'post_author' : str(post.author),
+                                'post_body' : post.selftext,
+                                'comment_id' : top_comment.id,
+                                'comment_author' : str(top_comment.author),
+                                'comment_body' : top_comment.body,
+                                'comment_score' : top_comment.score,
+                                'comment_created_utc' : top_comment.created_utc,
+                                'replies' : replies_data,
+                                'comments' : comments,
+                                'subreddit' : str(post.subreddit),
+                                'source' : 'Reddit'
+                            })
+
+                    break
+
+                except prawcore.exceptions.ServerError:
+                    wait_time = 2 ** attempt
+                    print(f"Server error. Retry {attempt + 1}/{max_retries} after {wait_time}s...")
+                    time.sleep(wait_time)
+
+            else:
+                print(f"❗❗❗ Reddit API failed after {max_retries} retries. Giving up on "
+                      f"search term {term} in subreddit {sub}.")
+
+        if data:
+
+            safe_saver(cache, path_to_cache)
+
+            results = pd.DataFrame(data)
+            data = pd.concat([data, results], ignore_index = True)
+
+    if not data.empty:
+
+        path_to_results = 'data/raw/reddit_results.parquet'
+
+        if os.path.exists(path_to_results):
+            all_results = pd.read_parquet(path_to_results)
+
+            data = pd.concat([all_results, data], ignore_index = True)
+        
+        data.to_parquet(path_to_results, engine = 'pyarrow', index = False)
+
+        unique_posts = data['comments'].sum()
+        all_posts = len(data)
+
+        print(f"Found {len(set(df['post_id']))} unique posts across "
+              f"{len(set(df['subreddit']))} subreddits. Recorded "
+              f"{all_posts - unique_posts} comments from the recorded posts. "
+              f"All files saved successfully. Script Complete.")
+
+    else:
+
+        print(f"Found 0 posts using the search term: {search_term}, "
+              f"across {len(subreddit)} subreddits.")
 
 if __name__ == '__main__':
     """
     Simply creates the commands needed to run in powershell. Takes two
     optional arguments:
 
-    --subreddit: the subreddit you want to search, 'all' for no subreddit
-        default: 'AppleWatch'
+    --subreddit: the subreddit you want to search, 'all' for no specific subreddit.
+        Exclude this argument if you want to search through a set of subreddits that
+        should be saved in 'data/raw/reddit_subreddits.pkl'
+        default: None.
     --search_term: the term are you searching for in the title/body
         of the text.
+        Exclude this argument if you want to search through a set of search terms that
+        should be saved in 'data/raw/reddit_subreddits.pkl'
         defeault: 'warranty'
     """
     parser = argparse.ArgumentParser(description = 'search terms for reddit.')
-    parser.add_argument('--subreddit', default = 'AppleWatch',
-                        help = 'subreddit to search, use all for no subreddit search.')
-    parser.add_argument('--search_term', default = 'warranty',
-                        help = 'what search term do you want to use')
+    parser.add_argument('--subreddit', default = None,
+                        help = 'subreddit to search. Default is None. If left as None, this function will load a list of subreddits to search.')
+    parser.add_argument('--search_term', default = None,
+                        help = 'what search term do you want to use. Default is None. If left as None, this function will load a list of terms to search.')
+    parser.add_argument('--limit', default = 10000, type = int,
+                        help = 'maximum number of posts to collect')
+    parser.add_argument('--comments', default = 100, type = int,
+                        help = 'maximum number of comments on a post to collect')
 
     args = parser.parse_args()
 
-    reddit_scrape(subreddit = args.subreddit, search_term = args.search_term)
+    reddit_scrape(subreddit = args.subreddit, search_term = args.search_term,
+                  limit = args.limit, comments = args.comments)

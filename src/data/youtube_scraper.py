@@ -1,0 +1,227 @@
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from dotenv import load_dotenv
+from shared_functions import safe_saver, safe_loader
+import pandas as pd
+import argparse
+import os
+
+def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
+                    before = None, after = None):
+
+    path_to_search_terms = 'data/raw/youtube_search_terms.pkl'
+
+    if os.path.exists(path_to_search_terms):
+        all_search_terms = safe_loader(path_to_search_terms)
+        
+        if not isinstance(all_search_terms, set):
+            all_search_terms = set(all_search_terms)
+
+    else:
+        all_search_terms = set()
+
+    if query not in all_search_terms:
+
+        all_search_terms.add(query)
+        safe_saver(all_search_terms, path_to_search_terms)
+
+    load_dotenv()
+    api_key = os.getenv('GOOGLE_KEY')
+    youtube = build('youtube', 'v3', developerKey = api_key)
+
+    params = {
+        'q': query,
+        'part': 'snippet',
+        'maxResults': 50,
+        'type': 'video'
+    }
+
+    if before:
+        params['publishedBefore'] = to_utc_iso(before)
+    if after:
+        params['publishedAfter'] = to_utc_iso(after)
+
+    path_to_cache = 'data/raw/youtube_cache.pkl'
+
+    if os.path(path_to_cache):
+        cache = safe_loader(path_to_cache)
+    else:
+        cache = set()
+
+    results = []
+    videos_fetched = 0
+    next_page_token = None
+
+    while videos_fetched < max_videos:
+        if next_page_token:
+            params['pageToken'] = next_page_token
+        else:
+            params.pop('pageToken', None)
+
+        remaining = max_videos - videos_fetched
+        params['maxResults'] = min(50, remaining)
+
+        search_response = youtube.search().list(**params).execute()
+
+        for item in search_response.get('items', []):
+            video_id = item['id']['videoId']
+
+            if video_id in cache:
+                continue
+            else:
+                cache.add(video_id)
+
+            title = item['snippet']['title']
+
+            video_response = youtube.videos().list(
+                part = 'snippet,recordingDetails,statistics',
+                id=  video_id
+            ).execute()
+
+            if not video_response['items']:
+                continue
+
+            video_info = video_response['items'][0]
+            channel_id = video_info['snippet']['channelId']
+            channel_title = video_info['snippet']['channelTitle']
+            location = video_info.get('recordingDetails', {}).get('location', None)
+            view_count = video_info['statistics'].get('viewCount', 'N/A')
+            like_count = video_info['statistics'].get('likeCount', 'N/A')
+
+            if location:
+                lat = location.get('latitude', None)
+                lon = location.get('longitude', None)
+            else:
+                lat = None
+                lon = None
+
+            channel_response = youtube.channels().list(
+                part='snippet,statistics',
+                id=channel_id
+            ).execute()
+
+            channel_info = channel_response['items'][0]
+            country = channel_info['snippet'].get('country', 'N/A')
+            subscribers = channel_info['statistics'].get('subscriberCount', 'N/A')
+
+            comments_next_page_token = None
+
+            try:
+                comments_response = youtube.commentThreads().list(
+                    part='snippet',
+                    videoId=video_id,
+                    maxResults=max_comments,
+                    textFormat='plainText'
+                ).execute()
+                
+            except HttpError as e:
+                if e.resp.status == 403 and 'commentsDisabled' in str(e):
+                    print(f"Comments are disabled for video {video_id}, skipping comments.")
+                    video_comments = []
+                    comment_counter = 0
+                else:
+                    raise
+                
+            else:
+                video_comments = []
+                comment_counter = 0
+                
+                for comment in comments_response['items']:
+                    author = comment['snippet']['topLevelComment']['snippet']['authorDisplayName']
+                    text = comment['snippet']['topLevelComment']['snippet']['textDisplay']
+                    date = comment['snippet']['topLevelComment']['snippet']['publishedAt']
+                    video_comments.append([author, date, text])
+                    comment_counter += 1
+
+            results.append({
+                'channel_id': channel_id,
+                'channel_name': channel_title,
+                'video_id': video_id,
+                'video_title': title,
+                'country': country,
+                'location': location,
+                'lat': lat,
+                'lon': lon,
+                'views': view_count,
+                'likes': like_count,
+                'subscribers': subscribers,
+                'comments': video_comments,
+                'number_of_comments': comment_counter,
+                'source': 'YouTube'
+            })
+
+            videos_fetched += 1
+            if videos_fetched >= max_videos:
+                break
+
+        next_page_token = search_response.get('nextPageToken')
+        if not next_page_token:
+            break
+
+    all_rows = []
+
+    for video in results:
+        base_info = {
+            'channel_id': video['channel_id'],
+            'channel_name': video['channel_name'],
+            'video_id': video['video_id'],
+            'video_title': video['video_title'],
+            'country': video['country'],
+            'location': video['location'],
+            'lat': video['lat'],
+            'lon': video['lon'],
+            'views': video['views'],
+            'likes': video['likes'],
+            'subscribers': video['subscribers'],
+            'source': video['source'],
+        }
+
+        for comment in video['comments']:
+            row = base_info.copy()
+            row['comment_author'] = comment[0]
+            row['comment_time'] = comment[1]
+            row['comment_text'] = comment[2]
+            all_rows.append(row)
+
+    if results:
+
+        path = 'data/raw/youtube_results.parquet'
+
+        if os.path.exists(path):
+            all_results = pd.read_parquet(path)
+            data = pd.DataFrame(results)
+            all_results = pd.concat([all_results, data], ignore_index = True)
+            all_results.to_parquet(path, engine = 'pyarrow', index = False)
+
+        else:
+            os.mkdris(path, exist_ok = True)
+            data = pd.DataFrame(results)
+            data.to_parquet(path, engine = 'pyarrow', index = False)
+
+        videos = len(data)
+        comments = data['number_of_comments'].sum()
+
+        safe_saver(cache, path_to_cache)
+
+        print(f"Found a total of {videos} videos and {comments} comments "
+              f"for search query: {query}. Parquet file saved successfully.")
+
+    else:
+        print(f"No results found for {search_term}")
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='query for YouTube search.')
+    parser.add_argument('--query', required = True,
+                        help='Required. What to search YouTube for.')
+    parser.add_argument('--videos', default = 100, type = int,
+                        help='Optional, default is 100. How many videos you want to pull')
+    parser.add_argument('--before', default = None,
+                        help='Optional. Fetch videos published before this date (dd.mm.yyyy)')
+    parser.add_argument('--after', default = None,
+                        help='Optional. Fetch videos published after this date (dd.mm.yyyy)')
+
+    arg = parser.parse_args()
+
+    youtube_scraper(query = arg.query, max_videos = arg.videos,
+                    before = arg.before, after = arg.after)
