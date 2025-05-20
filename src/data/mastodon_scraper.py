@@ -10,9 +10,9 @@ def mastodon_scraper(instance, max_posts):
     token = os.getenv('MASTODON_ACCESS_TOKEN')
 
     keywords = [
-        'warranty', 'guarantee', 'return policy', 'refunded',
-        'replacement', 'repair', 'customer service', 'covered under',
-        'extended warranty', 'applecare', 'applecare+'
+        'warranty', 'extended warranty', 'applecare', 'applecare+',
+        'samsung care+', 'microsoft complete', 'geek squad',
+        'amazon protect', 'sony protect'
     ]
     
     results = collect_from_instance(
@@ -23,6 +23,9 @@ def mastodon_scraper(instance, max_posts):
     )
 
     path = 'data/raw/'
+
+    instance = instance.split('//')[-1]
+    
     file = f"{instance}_mastodon_raw.json"
 
     safe_saver(results, path, file)
@@ -32,7 +35,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'search terms for Mastodon.')
     parser.add_argument('--instance', default = 'https://mastodon.social',
                         help = 'the mastodon instance you want to search')
-    parser.add_argument('--max_posts', default = '200',
+    parser.add_argument('--max_posts', default = 200, type = int,
                         help = 'the maximum number of posts you want to extract.')
 
     args = parser.parse_args()
@@ -53,5 +56,4 @@ if __name__ == '__main__':
         https://planet.moe/explore #Korea
         https://k.lapy.link/ #Korea
         https://respublicae.eu #Europe
-    
     """

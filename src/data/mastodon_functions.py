@@ -2,7 +2,6 @@ import time
 from mastodon import Mastodon
 from html.parser import HTMLParser
 
-
 class HTMLStripper(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -19,15 +18,15 @@ def strip_html_tags(html):
 
 def connect_to_instance(base_url, access_token):
     return Mastodon(
-        access_token=access_token,
-        api_base_url=base_url
+        access_token = access_token,
+        api_base_url = base_url
     )
 
 def matches_keywords(text, keywords):
     return any(keyword.lower() in text.lower() for keyword in keywords)
 
 def collect_from_instance(base_url, keywords, access_token, max_posts_per_instance):
-    print(f"\n🔍 Connecting to {base_url}")
+    print(f"\n🔍 Connecting to {base_url}:\n")
     mastodon = connect_to_instance(base_url, access_token)
     matched = []
     last_id = None

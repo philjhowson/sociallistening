@@ -4,6 +4,7 @@ import time
 import argparse
 import os
 import praw
+import prawcore
 import pandas as pd
 
 def reddit_scrape(subreddit = None, search_term = None,
@@ -57,16 +58,20 @@ def reddit_scrape(subreddit = None, search_term = None,
         
         else:
             print(f"❗❗❗ Error! List of subreddits not found at {path_to_subreddits}."
-                  f"If the file exists elsewhere, move it to the correct folder, change "
-                  f"path in the source file, or manually specify a subreddit to search.")
+                  f"If the file exists elsewhere, move it to the correct folder or change the "
+                  f"path in the source file. Otherwise, you must manually specify a subreddit "
+                  f"to search.")
 
             return None
 
     else:
-        subreddit = [subreddit]
+        length_of_search = len(all_subreddits)
 
-        if subreddit[0] not in all_subreddits:
-            all_subreddits.add(subreddit[0])
+        for sub in subreddit:
+            if sub not in all_subreddits:
+                all_subreddits.add(sub)
+
+        if length_of_search < len(all_subreddits):
             safe_saver(all_subreddits, path_to_subreddits)
 
     path_to_search_terms = 'data/raw/reddit_search_terms.pkl'
@@ -81,18 +86,31 @@ def reddit_scrape(subreddit = None, search_term = None,
 
     if not search_term:
 
-        search_term = all_search_terms
+        if all_search_terms:
+
+            search_term = all_search_terms
+
+        else:
+            print(f"❗❗❗ Error! List of search terms not found at {path_to_search_terms}."
+                  f"If the file exists elsewhere, move it to the correct folder or change the "
+                  f"path in the source file. Otherwise, you must manually specify a search term "
+                  f"to search.")
+
+            return None
 
     else:
-        search_term = [search_term]
+        length_of_search = len(search_term)
 
-        if search_term[0] not in all_search_terms:
-            all_search_terms.add(search_term[0])
+        for term in search_term:
+            if term not in all_search_terms:
+                all_search_terms.add(term)
+
+        if length_of_search < len(all_search_terms):
             safe_saver(all_search_terms, path_to_search_terms)
 
     """
-    sorts through each post, under the defined subreddit, with the defined
-    search term
+    searches for a cache of previously searched posts. If it does not exist, it
+    creates an empty set for cashing of post ids.
     """
 
     path_to_cache = 'data/raw/reddit_cache.pkl'
@@ -103,7 +121,18 @@ def reddit_scrape(subreddit = None, search_term = None,
     else:
         cache = set()
 
-    data = pd.DataFrame()
+    """
+    sorts through each post, under the defined subreddit, with the defined
+    search term
+    """
+
+    path_to_results = 'data/raw/reddit_results.parquet'
+
+    if os.path.exists(path_to_results):
+        all_data = pd.read_parquet(path_to_results)
+
+    else:
+        all_data = pd.DataFrame()
 
     for sub in subreddit:
 
@@ -162,38 +191,45 @@ def reddit_scrape(subreddit = None, search_term = None,
 
                 except prawcore.exceptions.ServerError:
                     wait_time = 2 ** attempt
-                    print(f"Server error. Retry {attempt + 1}/{max_retries} after {wait_time}s...")
+                    print(f"Server error. Retry {attempt + 1}/{max_retries} after {wait_time} seconds.")
                     time.sleep(wait_time)
+
+                except prawcore.exceptions.TooManyRequests:
+                    wait_time = 2 ** attempt
+                    print(f"Server Error. Too many requests. Retrying after {wait_time} seconds.")
+
+                except Exception as e:
+                    wait_time = 2 ** attempt
+                    print(f"Unexpected error: {e}. Retrying after {wait_time} seconds.")
 
             else:
                 print(f"❗❗❗ Reddit API failed after {max_retries} retries. Giving up on "
                       f"search term {term} in subreddit {sub}.")
 
-        if data:
+            if data:
 
-            safe_saver(cache, path_to_cache)
+                safe_saver(cache, path_to_cache)
 
-            results = pd.DataFrame(data)
-            data = pd.concat([data, results], ignore_index = True)
+                results = pd.DataFrame(data)
+                all_data = pd.concat([all_data, results], ignore_index = True)
 
-    if not data.empty:
+                all_data.to_parquet(path_to_results, engine = 'pyarrow', index = False)
 
-        path_to_results = 'data/raw/reddit_results.parquet'
+                unique_posts = len(set(results['post_id']))
+                all_posts = results['comments'].sum()
 
-        if os.path.exists(path_to_results):
-            all_results = pd.read_parquet(path_to_results)
+                print(f"Found {unique_posts} unique posts in the subreddit: "
+                      f"{sub}, using search term: {term}. Recorded "
+                      f"a total of {all_posts} posts/comments from this search. "
+                      f"Results file and cache successfully updated.")            
 
-            data = pd.concat([all_results, data], ignore_index = True)
-        
-        data.to_parquet(path_to_results, engine = 'pyarrow', index = False)
+    if not all_data.empty:
 
-        unique_posts = data['comments'].sum()
-        all_posts = len(data)
+        unique_posts = len(set(all_data['post_id']))
+        all_posts = all_data['comments'].sum()
 
-        print(f"Found {len(set(df['post_id']))} unique posts across "
-              f"{len(set(df['subreddit']))} subreddits. Recorded "
-              f"{all_posts - unique_posts} comments from the recorded posts. "
-              f"All files saved successfully. Script Complete.")
+        print(f"The search on reddit has found a total of {unique_posts} "
+              f"unique posts and a total of {all_posts} comments/posts.")
 
     else:
 
@@ -216,9 +252,9 @@ if __name__ == '__main__':
         defeault: 'warranty'
     """
     parser = argparse.ArgumentParser(description = 'search terms for reddit.')
-    parser.add_argument('--subreddit', default = None,
+    parser.add_argument('--subreddit', nargs='+', default = None,
                         help = 'subreddit to search. Default is None. If left as None, this function will load a list of subreddits to search.')
-    parser.add_argument('--search_term', default = None,
+    parser.add_argument('--search_term', nargs='+', default = None,
                         help = 'what search term do you want to use. Default is None. If left as None, this function will load a list of terms to search.')
     parser.add_argument('--limit', default = 10000, type = int,
                         help = 'maximum number of posts to collect')
