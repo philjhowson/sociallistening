@@ -1,6 +1,5 @@
 *.pdf
 *.xlsx
-platforms.txt
 .env
 *.pyc
 
@@ -9,5 +8,8 @@ venv/
 cookies/
 drivers/
 __pycache__/
+
+platforms.txt
+search_terms.txt
 
 !src/data/
