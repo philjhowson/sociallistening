@@ -1,8 +1,8 @@
 import pandas as pd
 import datetime
-import pickle
+from shared_functions import safe_saver, safe_loader
 
-def data_formatting():
+def data_observing():
 
     reddit_data = pd.read_parquet('data/raw/reddit_results.parquet')
 
@@ -23,17 +23,19 @@ def data_formatting():
 
     oldest_youtube = youtube_data['comment_time'].min()
     newest_youtube = youtube_data['comment_time'].max()
-
-    """
+    
     threads_data = pd.read_parquet('data/raw/threads_results.parquet')
+
+    threads_data.dropna(subset = ['content'], inplace = True)
 
     threads_posts = len(threads_data['parent_id'].unique()) - 1
     threads_comments = len(threads_data) - threads_posts
 
+    threads_data['published_on'] = threads_data['published_on'].astype(int)
     threads_data['published_on'] = pd.to_datetime(threads_data['published_on'], unit = 's').dt.date
 
     oldest_threads = threads_data['published_on'].min()
-    newest_threads = threads_data['published_on'].max()    
+    newest_threads = threads_data['published_on'].max()   
 
     print(f"Searches have found {reddit_posts} Reddit posts, {youtube_posts} "
           f"YouTube posts, and {threads_posts} Threads posts, for a total of " 
@@ -48,7 +50,6 @@ def data_formatting():
           f"the newest comment was posted at {newest_youtube}. The "
           f"oldest Threads comment was posted at {oldest_threads} and "
           f"the newest comment was posted at {newest_threads}.")
-    """
     
 if __name__ == '__main__':
-    data_formatting()
+    data_observing()

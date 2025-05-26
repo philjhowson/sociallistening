@@ -6,7 +6,7 @@ def login_and_save_session():
         context = browser.new_context()
         page = context.new_page()
 
-        page.goto("https://www.threads.net/login")
+        page.goto("https://www.threads.com/login")
         
         print("➡ Please log in manually in the opened browser window within 60 seconds...")
 

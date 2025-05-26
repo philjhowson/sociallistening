@@ -1,12 +1,12 @@
 from playwright.sync_api import sync_playwright
 from parsel import Selector
 from shared_functions import safe_saver, safe_loader
-import numpy as np
+from browser_scraping_functions import human_sleep, random_mouse_move, random_mouse_hover, open_random_link
+import random
 import argparse
-import time
 import os
 
-def search_threads(keyword, max_posts = 5):
+def search_threads(keyword = None, max_posts = 300):
 
     path_to_cache = 'data/raw/threads_cache.pkl'
 
@@ -40,53 +40,93 @@ def search_threads(keyword, max_posts = 5):
               f"Please check directory or run threads_get_login.py to "
               f"generate a new save state.")
 
+    path_to_searches = 'data/raw/general_search_terms.pkl'
+
+    if not keyword:
+
+        if os.path.exists(path_to_searches):
+            searches = safe_loader(path_to_searches)
+
+        else:
+            print(f"❗❗❗Error. List of search terms not found at: "
+                  f"{path_to_searches}. Please check create a list "
+                  f"of searches or enter an argument with --keyword.")
+
+    else:
+        searches = keyword
+
+    all_posts_found = set()
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless = False)  # Set headless=True for background run
         context = browser.new_context(storage_state = auth_state)
         page = context.new_page()
 
-        search_url = f"https://www.threads.net/search?q={keyword}"
-        page.goto(search_url)
-        time.sleep(np.random.randint(3, 10))  # Let JS initialize
+        base_url = 'https://www.threads.com'
 
-        last_height = 0
-        retries = 0
+        for keyword in searches:
 
-        while len(post_codes) < max_posts and retries < 5:
-            page.mouse.wheel(0, 5000)  # Scroll down
-            time.sleep(np.random.randint(10, 15))  # Wait for content to load
+            search_url = f"{base_url}/search?q={keyword}"
+            page.goto(search_url)
 
-            sel = Selector(text = page.content())
-            links = sel.css('a[href^="/@"]::attr(href)').getall()
+            retries = 0
+            last_height = 0
+            gathered_posts = set()
 
-            codes = [
-                href for href in links
-                if '/post/' in href            # only keep hrefs with '/post/'
-                and not href.endswith('/media')  # skip media links
-            ]
+            while len(gathered_posts) < max_posts and retries < 5:
+                human_sleep(3, 10)
+                page.mouse.wheel(0, random.randint(3000, 5000))
 
-            before_count = len(post_codes)
-            post_codes.update(codes)
-            cache.update(codes)
-            
-            # If no new posts found, increment retry
-            if len(post_codes) == before_count:
-                retries += 1
-            else:
-                retries = 0
+                chance = random.random()
+
+                new_height = page.evaluate("() => document.body.scrollHeight")
+
+                if new_height == last_height:
+                    retries += 1
+                else:
+                    retries = 0
+                    last_height = new_height
+
+                sel = Selector(text = page.content())
+                links = sel.css('a[href^="/@"]::attr(href)').getall()
+
+                codes = [href for href in links
+                         if '/post/' in href
+                         and not href.endswith('/media')
+                         and href not in cache]
+
+                if 0.35 < chance < 0.6:
+                    random_mouse_move(page)
+
+                elif chance < 0.35 and links:
+                    target = random.choice(links)
+                    random_mouse_hover(page, target)
+
+                    if chance < 0.10:
+                        open_random_link(target, 'https://www.threads.com', context)
+
+                gathered_posts.update(codes)
+                post_codes.update(codes)
+                cache.update(codes)
+                all_posts_found.update(codes)
+                
+                safe_saver(post_codes, path_to_codes)
+                safe_saver(cache, path_to_cache)
+                
+                print(f"Gathered {len(codes)} post ids. Continuing search...") 
 
         browser.close()
-
-    safe_saver(post_codes, path_to_codes)
-    safe_saver(cache, path_to_cache)
         
-    return None
+    print(f"Search complete, found a total of {len(all_posts_found)} "
+          f"post ids. There are a total of {len(post_codes)} post ids "
+          f"in threads_post_ids.pkl file to be scraped for further "
+          f"investigation.")
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description = 'search for threads.')
-    parser.add_argument('--keyword', required = True, help = 'Required. Keyword to search for.')
-    parser.add_argument('--max_posts', type = int, default = 5, help = 'Optional, default is 5. How many post ids to scrape.')
+    parser.add_argument('--keyword', nargs='+', help = 'Optional. Keyword(s) to search for. If None, a list of searches is loaded and searched for')
+    parser.add_argument('--max_posts', type = int, default = 300, help = 'Optional, default is 5. How many post ids to scrape.')
 
     arg = parser.parse_args()
 

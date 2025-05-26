@@ -7,7 +7,7 @@ import pandas as pd
 import argparse
 import os
 
-def youtube_scraper(query = None, max_videos = 1, max_comments = 1,
+def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
                     before = None, after = None):
 
     path_to_search_terms = 'data/raw/youtube_search_terms.pkl'
@@ -90,11 +90,11 @@ def youtube_scraper(query = None, max_videos = 1, max_comments = 1,
             like_count = int(video_info['statistics'].get('likeCount', 0))
 
             if location:
-                lat = location.get('latitude', None)
-                lon = location.get('longitude', None)
+                lat = location.get('latitude', 0)
+                lon = location.get('longitude', 0)
             else:
-                lat = None
-                lon = None
+                lat = 0
+                lon = 0
 
             channel_response = youtube.channels().list(
                 part='snippet,statistics',
@@ -104,7 +104,9 @@ def youtube_scraper(query = None, max_videos = 1, max_comments = 1,
             channel_info = channel_response['items'][0]
             country = channel_info['snippet'].get('country', 'N/A')
             subscribers = channel_info['statistics'].get('subscriberCount', 'N/A')
-            publish_date = video_info['snippet']['publishedAt']            
+            publish_date = video_info['snippet']['publishedAt']
+            description = video_response['items'][0]['snippet']['description']
+            hashtags = [word for word in description.split() if word.startswith('#')]
 
             comments_next_page_token = None
 
@@ -142,13 +144,13 @@ def youtube_scraper(query = None, max_videos = 1, max_comments = 1,
                 'video_id': video_id,
                 'video_title': title,
                 'country': country,
-                'location': location,
                 'date': publish_date,
                 'lat': lat,
                 'lon': lon,
                 'views': view_count,
                 'likes': like_count,
                 'subscribers': subscribers,
+                'hashtags': hashtags, 
                 'comments': video_comments,
                 'number_of_comments': comment_counter,
                 'source': 'YouTube'
@@ -171,11 +173,11 @@ def youtube_scraper(query = None, max_videos = 1, max_comments = 1,
             'video_id': video['video_id'],
             'video_title': video['video_title'],
             'country': video['country'],
-            'location': video['location'],
             'lat': video['lat'],
             'lon': video['lon'],
             'views': video['views'],
             'likes': video['likes'],
+            'hashtags': video['hashtags'], 
             'subscribers': video['subscribers'],
             'source': video['source'],
         }
@@ -194,21 +196,21 @@ def youtube_scraper(query = None, max_videos = 1, max_comments = 1,
 
         if os.path.exists(path):
             all_results = pd.read_parquet(path)
-            data = pd.DataFrame(results)
+            data = pd.DataFrame(all_rows)
             all_results = pd.concat([all_results, data], ignore_index = True)
             all_results.to_parquet(path, engine = 'pyarrow', index = False)
 
         else:
-            os.makedirs(path, exist_ok = True)
-            data = pd.DataFrame(results)
+            os.makedirs('data/raw/', exist_ok = True)
+            data = pd.DataFrame(all_rows)
             data.to_parquet(path, engine = 'pyarrow', index = False)
-
-        videos = len(data)
-        comments = data['number_of_comments'].sum()
+            
+        unique_videos = len(data['video_id'].unique())
+        comments = len(data) - unique_videos
 
         safe_saver(cache, path_to_cache)
 
-        print(f"Found a total of {videos} videos and {comments} comments "
+        print(f"Found a total of {unique_videos} videos and {comments} comments "
               f"for search query: {query}. Parquet file saved successfully.")
 
     else:
@@ -219,7 +221,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'query for YouTube search.')
     parser.add_argument('--query', required = True,
                         help = 'Required. What to search YouTube for.')
-    parser.add_argument('--videos', default = 1, type = int,
+    parser.add_argument('--videos', default = 100, type = int,
                         help = 'Optional, default is 100. How many videos you want to pull')
     parser.add_argument('--before', default = None,
                         help = 'Optional. Fetch videos published before this date (dd.mm.yyyy)')
