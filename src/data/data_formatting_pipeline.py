@@ -4,9 +4,12 @@ import regex
 import string
 import stanza
 import numpy as np
+import pandas as pd
 from shared_functions import safe_loader
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
 import spacy
 import html
 
@@ -19,6 +22,74 @@ def get_country_code(row):
         return country_code
     
     return np.nan
+
+model_name = "facebook/nllb-200-distilled-600M"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+"""
+class TextTranslator():
+    def __init__ (self, len_df):
+        self.translated = 0
+        self.length = len_df
+
+    def translate_text(self, text, lang, iso_codes):
+
+        self.translated += 1
+
+        if self.translated % 1000 == 0:
+            print(f"Translated {self.translated} strings out of {self.length}.")
+
+        if lang == 'en':
+            return text, True
+
+        src_lang_code = iso_codes.get(lang)
+
+        if src_lang_code:
+            tokenizer.src_lang = src_lang_code
+            inputs = tokenizer(text, return_tensors = "pt", truncation = True)
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+
+            forced_bos_token_id = tokenizer.convert_tokens_to_ids("<eng_Latn>")
+            generated_tokens = model.generate(**inputs, forced_bos_token_id = forced_bos_token_id)
+            translated_text = tokenizer.batch_decode(generated_tokens, skip_special_tokens = True)[0]
+
+            return translated_text, True
+        else:
+            return text, False    
+"""
+            
+translated = 0
+
+def translate_text(text, lang, iso_codes):
+
+    global translated
+    translated += 1
+
+    if translated % 1000 == 0:
+        print(f"Translated {translated} strings.")
+
+    if lang == 'en':
+        return text, True
+
+    src_lang_code = iso_codes.get(lang)
+
+    if src_lang_code:
+        tokenizer.src_lang = src_lang_code
+        inputs = tokenizer(text, return_tensors = "pt", truncation = True)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        forced_bos_token_id = tokenizer.convert_tokens_to_ids("<eng_Latn>")
+        generated_tokens = model.generate(**inputs, forced_bos_token_id = forced_bos_token_id)
+        translated_text = tokenizer.batch_decode(generated_tokens, skip_special_tokens = True)[0]
+
+        return translated_text, True
+    else:
+        return text, False
+
 
 def preprocess_data(text):
 
@@ -95,7 +166,8 @@ def reduce_repeats(text):
     return re.sub(r'(.)\1{2,}', r'\1\1', text)
 
 try:
-    spacy_codes = safe_loader('data/raw/spacy_codes.pkl')
+    #spacy_codes = safe_loader('data/raw/spacy_codes.pkl')
+    spacy_codes = {'en' : 'en_core_web_sm'}
 except Exception as e:
     print(f"Failed to load spacy_codes: {e}")
     spacy_codes = None
@@ -173,28 +245,70 @@ def lemmatize(text, lang):
 
     return text
 
-def pipeline(df, input_col, custom_stops = None, whitelist = None, spacy = None,
-             geolocation = True, detect_lang = True, preprocessing = True,
-             remove_stops = True, lemma = True, punctuation = True,
-             characters = True):
+"""
+Refactor below and above for a class for translation.
+"""
+
+def pipeline(df, input_col, iso_codes = None, custom_stops = None, whitelist = None,
+             spacy = None, geolocation = True, detect_lang = True, translate = True,
+             preprocessing = True, remove_stops = True, lemma = True,
+             punctuation = True, characters = True):
 
     language_column = f"{input_col}_language"
+    translated_column = f"{input_col}_translated"
     cleaned_column = f"cleaned_{input_col}"
 
     if geolocation:
+        print('Geolocation started...')
         df['geolocation'] = df.apply(get_country_code, axis = 1)
+    
     if detect_lang:
+        print('Language detection started...')
         df[language_column] = df[input_col].apply(detect_language)
+
+    if translate and translated_column in df.columns:
+            print('Translation column found. Skipping...')
+            pretranslated = True
+    elif translate:
+        print('Translation started...')
+        df[[translated_column, 'success']] = df.apply(lambda row: translate_text(row[input_col], row[language_column], iso_codes),
+                                                        axis = 1, result_type = 'expand')
+        translated = df['success'].sum()
+        all_text = len(df)
+        input_col = translated_column
+        print(f"{round(translated/all_text * 100, 2)}% of all data successfully translated.")
+        
+        df.to_parquet(f"data/processed/translated_youtube_results.parquet")
+
+        pretranslated = True
+
     if preprocessing:
+        print('Preprocessing started...')
         df[cleaned_column] = df[input_col].apply(preprocess_data)
+
     if remove_stops:
-        df[cleaned_column] = df.apply(lambda x: remove_stopwords(x[cleaned_column], x[language_column], custom_stops), axis = 1)
+        print('Remove stops started...')
+        if pretranslated:
+            df[cleaned_column] = df.apply(lambda x: remove_stopwords(x[cleaned_column], 'en', custom_stops), axis = 1)
+        else:
+            df[cleaned_column] = df.apply(lambda x: remove_stopwords(x[cleaned_column], x[language_column], custom_stops), axis = 1)
+    
     if lemma:
-        df[cleaned_column] = df.apply(lambda x: lemmatize(x[cleaned_column], x[language_column]), axis = 1)
+        print('Lemmatization started...')
+        if pretranslated:
+            df[cleaned_column] = df.apply(lambda x: lemmatize(x[cleaned_column], 'en'), axis = 1)
+        else:
+            df[cleaned_column] = df.apply(lambda x: lemmatize(x[cleaned_column], x[language_column]), axis = 1)
+    
     if punctuation:
+        print('Punctuation removal started...')
         df[cleaned_column] = df[cleaned_column].apply(lambda x: remove_punctuation(x, whitelist))
+    
     if characters:
+        print('Removing stray strings. started...')
         df['enough_char'] = df[cleaned_column].apply(has_enough_char)
         df = df[df['enough_char']]
+        removed = len(df)
+        print(f"After data processing {round(removed/all_text * 100, 2)}% of data points remain.")
 
     return df

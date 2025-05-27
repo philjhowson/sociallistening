@@ -39,9 +39,11 @@ def data_observing():
 
     print(f"Searches have found {reddit_posts} Reddit posts, {youtube_posts} "
           f"YouTube posts, and {threads_posts} Threads posts, for a total of " 
-          f"{reddit_posts + youtube_posts + threads_posts} posts. The searches "
-          f"also yeilded a total of {reddit_comments + youtube_comments + threads_comments} "
-          f"comments. This is a total of {reddit_posts + youtube_posts + threads_posts + reddit_comments + youtube_comments + threads_comments} "
+          f"{reddit_posts + youtube_posts + threads_posts} posts. There were "
+          f"{reddit_comments} Reddit comments, {youtube_comments} YouTube comments, "
+          f"and {threads_comments} Threads comments for a total of "
+          f"{reddit_comments + youtube_comments + threads_comments} comments. "
+          f"This is a total of {reddit_posts + youtube_posts + threads_posts + reddit_comments + youtube_comments + threads_comments} "
           f"data points so far.")
 
     print(f"The oldest Reddit comment was posted at {oldest_reddit} "
