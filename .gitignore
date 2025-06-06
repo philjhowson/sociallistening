@@ -3,6 +3,8 @@
 .env
 *.pyc
 
+convert_type.py
+
 data/
 venv/
 cookies/
