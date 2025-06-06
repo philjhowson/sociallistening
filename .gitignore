@@ -10,6 +10,7 @@ venv/
 cookies/
 drivers/
 __pycache__/
+images/
 
 platforms.txt
 search_terms.txt
