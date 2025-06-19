@@ -77,3 +77,8 @@ def safe_loader(path):
         print(f"❗❗❗ File at {path} not found!")
 
     return None
+
+def split_title(title):
+    words = title.split()
+    half = len(words) // 2
+    return " ".join(words[:half]) + "\n" + " ".join(words[half:])

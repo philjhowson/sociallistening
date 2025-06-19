@@ -12,7 +12,7 @@ def reddit_scrape(subreddit = None, search_term = None,
 
     """
     This loads in private information from a .env file that contains
-    passwords, usenames, and so on.
+    passwords, usernames, and so on.
     """
     load_dotenv()
 
@@ -21,7 +21,7 @@ def reddit_scrape(subreddit = None, search_term = None,
     user_agent = os.getenv('REDDIT_USER_AGENT')
 
     """
-    creates the reddit object cotaining the id, password, and the
+    creates the reddit object containing the id, password, and the
     user_agent, so that searches can be performed.
     """
     reddit = praw.Reddit(
@@ -31,8 +31,7 @@ def reddit_scrape(subreddit = None, search_term = None,
     )
 
     """
-    allow 18+ content, so that reddits like 'iqos' can
-    be accessed.
+    allow 18+ content
     """
 
     reddit.config._allow_nsfw = True
@@ -238,7 +237,7 @@ def reddit_scrape(subreddit = None, search_term = None,
 
 if __name__ == '__main__':
     """
-    Simply creates the commands needed to run in powershell. Takes two
+    Simply creates the commands needed to run in powershell. Takes four
     optional arguments:
 
     --subreddit: the subreddit you want to search, 'all' for no specific subreddit.
@@ -249,7 +248,9 @@ if __name__ == '__main__':
         of the text.
         Exclude this argument if you want to search through a set of search terms that
         should be saved in 'data/raw/reddit_subreddits.pkl'
-        defeault: 'warranty'
+        defeault: None
+    --limit: limit the number of posts you want to scrape per topic. Default 10,000.
+    --comments: limits the number of comments on a post that will be scraped. Default 100.
     """
     parser = argparse.ArgumentParser(description = 'search terms for reddit.')
     parser.add_argument('--subreddit', nargs='+', default = None,

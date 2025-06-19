@@ -29,7 +29,7 @@ def preprocess_reddit():
     
     data = pd.read_parquet(f"data/raw/reddit_results.parquet")
     print('Beginning preprocessing...')
-    before = len(data)
+
     custom_stops = shared_functions.safe_loader('data/raw/custom_stopwords.pkl')
     whitelist = shared_functions.safe_loader('data/raw/whitelisted_characters.pkl')
     subreddits_to_region = shared_functions.safe_loader('data/raw/subreddit_to_region.pkl')
@@ -50,7 +50,6 @@ def preprocess_reddit():
     
     data.drop(columns = columns_to_drop, inplace = True)
     data.to_parquet(f"{path_to_processed}/cleaned_reddit_results.parquet")
-    after = len(data)
 
 def preprocess_threads():
 
