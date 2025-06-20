@@ -191,7 +191,7 @@ def format_data(function):
             cosine_similarity()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description = 'prepare reddit data for analysis')
+    parser = argparse.ArgumentParser(description = 'prepare data for analysis')
     parser.add_argument('--function', default = 'all', help = 'Default: "all", Options: "preprocess" to prepare data, "embeddings" to creating embeddings, "similarity" to do cosine similarity for comments, "all" to do all steps.')
 
     arg = parser.parse_args()

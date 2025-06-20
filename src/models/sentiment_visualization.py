@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib.dates as mdates
+import pymannkendall as mk
 import statsmodels.api as sm
 import numpy as np
 import shared_functions
@@ -102,56 +103,48 @@ def time_sentiment():
     monthly_data = data.groupby(['topic', 'year_month']).agg({'sentiment' : 'mean'}).reset_index()
     monthly_data.sort_values(['topic', 'year_month'], inplace = True)
 
+    year = '2020'
+
     topics[1], topics[2], topics[3] = topics[3], topics[1], topics[2]
     monthly_data['topic'] = monthly_data['topic'].replace({1 : 3, 2 : 1, 3 : 2})
-    monthly_data_filtered = monthly_data[monthly_data['year_month'] >= '2015-01-01'].copy()
+    monthly_data = monthly_data[monthly_data['year_month'] >= year + '-01-01'].copy()
 
     topic = sorted(monthly_data['topic'].unique())
     colors = ['#006868ff', '#008181ff', '#0193a0ff', '#01d1d1ff', '#1bd9c5ff']
 
-    test_results = []
-
-    for top in topic:
-
-        temp = monthly_data_filtered[monthly_data_filtered['topic'] == top]
-
-        y = np.array(temp['sentiment'])
-        t = np.arange(len(y))
-
-        X = sm.add_constant(t)
-        model = sm.OLS(y, X).fit()
-
-        slope = round(model.params[1], 4)
-        p_value = round(model.pvalues[1], 4)
-
-        test_results.append([slope, p_value])
-
-    fig, ax = plt.subplots(2, 2, figsize = (25, 10))
+    fig, ax = plt.subplots(2, 2, figsize = (20, 10))
 
     for index, axes in enumerate(ax.flat):
+
+        for spine in ['top', 'right']:
+            axes.spines[spine].set_visible(False)
 
         temp = monthly_data[monthly_data['topic'] == topic[index]].copy()
         x_coord = mdates.date2num(temp['year_month'].iloc[0])
 
+        result = mk.original_test(temp['sentiment'])
+
         temp['year_month_num'] = temp['year_month'].map(pd.Timestamp.toordinal)
         smoothed = sm.nonparametric.lowess(temp['sentiment'], temp['year_month_num'], frac = 0.1)
 
-        #plt.plot(temp['year_month'], temp['sentiment'], label = 'Original', color = colors[index])
         axes.plot(pd.to_datetime([pd.Timestamp.fromordinal(int(x)) for x in smoothed[:, 0]]),
                 smoothed[:, 1], label = 'Lowess Smoothed', color = colors[index])
 
-        #axes.plot(temp['year_month'], temp['sentiment'], marker = 'o', color = colors[index])
-        axes.axhline(y = 0, color = 'black', linestyle = '--', linewidth = 1)
-        axes.text(x_coord, -0.55, f"Slope: {test_results[index][0]}", fontsize = 16, fontname = 'Arial')
-        axes.text(x_coord, -0.7, f"p-value: {test_results[index][1]}", fontsize = 16, fontname = 'Arial')
-        axes.text(x_coord, -0.85, f"Δ Sentiment: {round(test_results[index][0] * len(monthly_data_filtered)/4, 4)}", fontsize = 16, fontname = 'Arial'),       
+        if index == 0:
+            y_coords = [0.25, 0.175, 0.1]
+        else:
+            y_coords = [0.9, 0.825, 0.75]
+
+        axes.text(x_coord, y_coords[0], f"Slope: {round(result.slope, 4)}", fontsize = 16, fontname = 'Arial')
+        axes.text(x_coord, y_coords[1], f"p-value: {round(result.p, 4)}", fontsize = 16, fontname = 'Arial')
+        axes.text(x_coord, y_coords[2], f"Δ Sentiment: {round(result.slope * len(temp), 4)}", fontsize = 16, fontname = 'Arial'),       
         axes.set_title(f"{topics[index]}", fontname = 'Arial', fontsize = 16)
-        axes.set_ylim((-1.05, 1.05))
+        axes.set_ylim((0, 1.05))
         axes.xaxis.set_major_locator(mdates.YearLocator())
         axes.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
 
     plt.tight_layout()
-    plt.savefig('images/sentiment_over_time.png')
+    plt.savefig(f"images/sentiment_over_time_{year}.png")
 
 def token_count():
 
@@ -243,53 +236,7 @@ def scores():
     plt.tight_layout()
     plt.savefig('images/pain_points_drivers_scores.png')
 
-def fuzzy():
-
-    import pandas as pd
-    from rapidfuzz import fuzz, process
-
-    df = pd.read_csv(f"{path_to_processed}/final_cleaned_data.csv")
-    df['text'] = df['text'].astype(str)
-    text_list = df['text'].tolist()
-
-    examples_df = pd.read_excel(f"{path_to_processed}/Sentence_Match_Results.xlsx")
-    sentences = examples_df.iloc[:, 0].astype(str).tolist()
-
-    results = []
-
-    for index, sent in enumerate(sentences):
-
-        if not index % 100:
-            print(f"Starting on row {index}.")
-        
-        sent_clean = sent.strip()
-
-        exact_indices = df[df['text'].str.lower() == sent_clean.lower()].index.tolist()
-
-        fuzzy_matches = process.extract(
-            sent_clean, text_list, scorer = fuzz.partial_ratio,
-            score_cutoff = 70, limit = 5
-        )
-        fuzzy_indices = [match[2] for match in fuzzy_matches if match[2] not in exact_indices]
-
-        results.append({
-            "Example Sentence": sent_clean,
-            "Exact Match Rows": ', '.join(map(str, exact_indices)),
-            "Close Match Rows (Fuzzy)": ', '.join(map(str, fuzzy_indices))
-        })
-
-    # Save to Excel
-    out_df = pd.DataFrame(results)
-    out_df.to_excel(f"{path_to_processed}/Sentence_Match_With_RapidFuzz.xlsx", index = False)
-
-
-def check_row(row):
-    
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
-
-    print(data['text'].iloc[row])
-
-def arg_parse(function, row):
+def arg_parse(function):
 
     match function:
         case 'vis':
@@ -302,17 +249,11 @@ def arg_parse(function, row):
             token_count()
         case 'score':
             scores()
-        case 'check':
-            row = int(row)
-            check_row(row)
-        case 'fuzz':
-            fuzzy()
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Just a simple argument parser.')
     parser.add_argument('--function', required = True, help = 'Choose either vis, map, time, count, or score.')
-    parser.add_argument('--row', default = None, required = False)
     
     arg = parser.parse_args()
 
-    arg_parse(function = arg.function, row = arg.row)
+    arg_parse(function = arg.function)

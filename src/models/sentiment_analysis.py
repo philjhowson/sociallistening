@@ -96,6 +96,7 @@ def sentiment_text():
         else:
             print(f"No positive comments found for topic #{topic}.")
 
+
 def arg_parse(function):
 
     match function:
@@ -109,7 +110,7 @@ def arg_parse(function):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Just a simple argument parser.')
     parser.add_argument('--function', required = True, help = 'Choose either analysis, topic, text.')
-    
+       
     arg = parser.parse_args()
 
     arg_parse(function = arg.function)
