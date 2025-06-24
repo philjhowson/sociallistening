@@ -9,13 +9,9 @@ import argparse
 
 path_to_processed = 'data/processed/'
 
-def data_print():
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
-    print(data.columns)
-
 def frequency_grouping():
 
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2', device = device)
@@ -36,11 +32,11 @@ def frequency_grouping():
     results_df = pd.DataFrame(results, columns = ['index', 'labels']).set_index('index').sort_index()
     data['labels'] = results_df['labels']
 
-    data.to_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
 def scoring():
 
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
     scalar = 1
 
@@ -56,11 +52,11 @@ def scoring():
     mappings = {(topic, label) : score for topic, label, score in zipped}
     data['score'] = data.apply(lambda x : mappings.get((x['topic'], x['labels'])), axis = 1)
 
-    data.to_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
 def find_themes():
 
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
     themes = {}
     topics = sorted(data['topic'].unique())
@@ -78,7 +74,7 @@ def find_themes():
 
 def example_text():
 
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
     zipped = list(zip(data['topic'], data['labels']))
     unique_combos = np.unique(zipped, axis = 0)
@@ -112,12 +108,9 @@ def run_function(function):
             example_text()
 
 if __name__ == '__main__':
-    """
     parser = argparse.ArgumentParser(description = 'parser for scoring functions')
     parser.add_argument('--function', default = 'score', help = 'freq, score, theme, or example.')
 
     arg = parser.parse_args()
 
     run_function(function = arg.function)
-    """
-    data_print()

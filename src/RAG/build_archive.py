@@ -9,10 +9,11 @@ import torch
 import pandas as pd
 
 path_to_processed = 'data/processed'
+path_to_RAG = 'data/RAG'
 
 def build_database():
 
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
     custom_stops = shared_functions.safe_loader('data/raw/custom_stopwords.pkl')
     whitelist = shared_functions.safe_loader('data/raw/whitelisted_characters.pkl')
@@ -50,7 +51,7 @@ def build_database():
 
     print('Building FAISS Archive...')
     faiss_archive = FAISS.from_documents(documents, embedding_function)
-    faiss_archive.save_local(f"{path_to_processed}/faiss_archive")
+    faiss_archive.save_local(f"{path_to_RAG}/complete_faiss_archive")
     print('Archive successfully built and saved!')
 
 if __name__ == '__main__':

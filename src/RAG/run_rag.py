@@ -27,6 +27,7 @@ from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 
 path_to_processed = 'data/processed'
+path_to_rag = 'data/RAG'
 
 def build_prompt():
 
@@ -90,7 +91,7 @@ def build_prompt():
 def RAG(question, k = 500):
 
     embedding_model = HuggingFaceEmbeddings(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
-    archive = FAISS.load_local(f"{path_to_processed}/faiss_archive", embeddings = embedding_model,
+    archive = FAISS.load_local(f"{path_to_rag}/complete_faiss_archive", embeddings = embedding_model,
                                allow_dangerous_deserialization = True)
 
     load_dotenv()
@@ -180,7 +181,7 @@ def RAG(question, k = 500):
     batched_metadata['Answer'] = answer
     batched_metadata['Hash'] = key
 
-    shared_functions.safe_saver(batched_metadata, f"data/RAG/{key}.json")
+    shared_functions.safe_saver(batched_metadata, f"{path_to_rag}/{key}.json")
 
 def run_functions(function, q, k):
 
