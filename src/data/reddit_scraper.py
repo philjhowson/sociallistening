@@ -66,9 +66,7 @@ def reddit_scrape(subreddit = None, search_term = None,
     else:
         length_of_search = len(all_subreddits)
 
-        for sub in subreddit:
-            if sub not in all_subreddits:
-                all_subreddits.add(sub)
+        all_subreddits = all_subreddits.union(subreddit)
 
         if length_of_search < len(all_subreddits):
             safe_saver(all_subreddits, path_to_subreddits)

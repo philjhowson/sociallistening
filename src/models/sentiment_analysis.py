@@ -14,8 +14,10 @@ def sentiment_analysis():
     data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata.parquet")
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-xlm-roberta-base-sentiment")
-    model = AutoModelForSequenceClassification.from_pretrained("cardiffnlp/twitter-xlm-roberta-base-sentiment").to(device)
+
+    model_name = 'nlptown/bert-base-multilingual-uncased-sentiment'
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
 
     print('Analyzing sentiment...')
 
@@ -24,13 +26,16 @@ def sentiment_analysis():
 
     texts = data['cleaned_text']
     batch_size = 256
+    total_batches = (len(texts) + batch_size - 1) // batch_size
 
     model.eval()
     with torch.no_grad():
-        for i in range(0, len(texts), batch_size):
+        for index, i in enumerate(range(0, len(texts), batch_size)):
+            if index % 100 == 0:
+                print(f"Analyzing batch {index}/{total_batches}")
+
             batch_texts = texts[i:i + batch_size].tolist()
-            # Make sure all entries are strings (replace None or non-str with empty string)
-            batch_texts = [str(t) if isinstance(t, str) else "" for t in batch_texts]
+            batch_texts = [str(t) if isinstance(t, str) else '' for t in batch_texts]
 
             inputs = tokenizer(batch_texts, 
                                return_tensors = 'pt', 
@@ -47,7 +52,7 @@ def sentiment_analysis():
             all_probs.extend(probs.cpu().numpy())
 
     data['sentiment_label'] = all_preds
-    data['sentiment_label'] = data['sentiment_label'].map({0: -1, 1: 0, 2: 1})
+    data['sentiment_label'] = data['sentiment_label'].map({0: -1, 1: -0.5, 2: 0, 3: 0.5, 4: 1})
 
     data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment.parquet")
 

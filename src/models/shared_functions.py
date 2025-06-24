@@ -1,8 +1,7 @@
 import json
 import pickle
 import os
-import pandas as pd
-from keybert import KeyBERT
+
 
 def safe_saver(item, path = None):
     """
@@ -84,21 +83,3 @@ def split_title(title):
     words = title.split()
     half = len(words) // 2
     return " ".join(words[:half]) + "\n" + " ".join(words[half:])
-
-kw_model = KeyBERT(model='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
-
-def get_keywords(texts, labels, scores, top_n = 10, top_score = 5):
-
-    cluster_keywords = {}
-    df = pd.DataFrame({'text': texts, 'labels': labels, 'score' : scores})
-    clusters = sorted(df['labels'].unique())
-    ranked_scores = sorted(df['score'].unique(), reverse = True)
-
-    df = df[df['score'].isin(ranked_scores[:10])]
-
-    for cluster in clusters:
-        cluster_text = " ".join(df[df['labels'] == cluster]['text'])
-        keywords = kw_model.extract_keywords(cluster_text, top_n = top_n)
-        cluster_keywords[cluster] = [kw[0] for kw in keywords]
-    
-    return cluster_keywords

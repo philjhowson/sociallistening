@@ -9,6 +9,10 @@ import argparse
 
 path_to_processed = 'data/processed/'
 
+def data_print():
+    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    print(data.columns)
+
 def frequency_grouping():
 
     data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
@@ -83,13 +87,16 @@ def example_text():
     for topic, label in unique_combos:
 
         temp = data[(data['topic'] == topic) & (data['labels'] == label)]
+        ranked_scores = sorted(temp['score'].unique(), reverse = True)
+        temp = temp[temp['score'].isin(ranked_scores[0:10])]
         n_samples = min(10, len(temp))
         choice = np.random.choice(temp.index, replace = False, size = n_samples)
-
         temp = temp.loc[choice]
 
         print(f"Example text from topic: {topic}; label: {label}")
-        print(temp['text'])
+        for item in temp['text']:
+            print(item)
+            print('\n\n\n\n\n--------------------\n\n\n\n\n')
         print(choice)
 
 def run_function(function):
@@ -105,9 +112,12 @@ def run_function(function):
             example_text()
 
 if __name__ == '__main__':
+    """
     parser = argparse.ArgumentParser(description = 'parser for scoring functions')
     parser.add_argument('--function', default = 'score', help = 'freq, score, theme, or example.')
 
     arg = parser.parse_args()
 
     run_function(function = arg.function)
+    """
+    data_print()
