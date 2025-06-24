@@ -97,18 +97,32 @@ def scrape_thread(page, url: str) -> dict:
                 open_random_link(target, 'https://www.threads.com', context)
 
         """
-        
+        Retrieves the new_height after page loading and compares it to the last
+        height. If they are the same, it executes scraping. However, scraping
+        will also be executed if the current scroll is the last scroll in the
+        range.
         """
 
         new_height = page.evaluate("() => document.body.scrollHeight")
 
         if new_height == last_height or scroll == max_scrolls - 1:
+
+            """
+            Brief human sleep to simulate a persons scanning the resting
+            position of the current webpage. Gathers page content.
+            """
             
             human_sleep(2, 5)
             selector = Selector(page.content())
             hidden_datasets = selector.css('script[type="application/json"][data-sjs]::text').getall()
 
             for hidden_dataset in hidden_datasets:
+                """
+                If the relevant items for scraping threads are not present
+                in hidden datasets, it continues with the rest of the script.
+                If there are no thread_items in the extracted dictionary,
+                the script will continue with the rest.
+                """
                 
                 if '"ScheduledServerJS"' not in hidden_dataset:
                     continue
@@ -116,7 +130,7 @@ def scrape_thread(page, url: str) -> dict:
                     continue
 
                 data = json.loads(hidden_dataset)
-                thread_items = nested_lookup("thread_items", data)
+                thread_items = nested_lookup('thread_items', data)
 
                 if not thread_items:
                     continue
@@ -133,6 +147,13 @@ def scrape_thread(page, url: str) -> dict:
         last_height = new_height
 
     raise ValueError('Could not find thread data in page after scrolling')
+
+"""
+Loads previously gathered post ids from threads, shuffles the codes.
+It opens the cache file if there is one, if not, it creates one.
+Set is used because it delivers and O(1) lookup time and ensures
+no unnecessary duplicate items are cached.
+"""
 
 path_to_ids = 'data/raw/threads_post_ids.pkl'
 
