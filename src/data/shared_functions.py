@@ -1,6 +1,7 @@
 import json
 import pickle
 import os
+from datetime import datetime, timezone
 
 def safe_saver(item, path = None):
     """
@@ -77,3 +78,12 @@ def safe_loader(path):
         print(f"❗❗❗ File at {path} not found!")
 
     return None
+
+def to_utc_iso(dt):
+    """
+    Simply converts a dt object in the formate day/month/year
+    to iso format.
+    """
+    if not isinstance(dt, datetime):
+        raise ValueError("Input must be a datetime object")
+    return dt.astimezone(timezone.utc).isoformat()

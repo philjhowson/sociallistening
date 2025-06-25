@@ -1,6 +1,13 @@
 from playwright.sync_api import sync_playwright
 
 def login_and_save_session():
+    """
+    This opens a playwright browser to threads so that the user can login and
+    their auth_state will be saved. There is sufficient time for the user
+    to enter in credentials and even login through Instagram if necessary.
+    This must be run before the threads scraper, unless you have a file
+    with the auth_state in it already.
+    """
     with sync_playwright() as p:
         browser = p.chromium.launch(headless = False)
         context = browser.new_context()

@@ -39,9 +39,7 @@ def reddit_scrape(subreddit = None, search_term = None,
 
     """
     This loads in a previously defined set of all subreddits to be searched.
-    If none exists, it creates one. If one is created and no subreddit is
-    specified in the command line, then the script notifies you of the error
-    and exits the script.
+    If none exists, it creates one.
     """
 
     path_to_subreddits = 'data/raw/reddit_subreddits.pkl'
@@ -54,17 +52,25 @@ def reddit_scrape(subreddit = None, search_term = None,
     else:
         all_subreddits = set()
 
+    """
+    If a new all_subreddits is created and no subreddit is specified in the command line,
+    then the script notifies you of the error
+    and exits the script.
+    
+    Then any specified subreddits in the query are added to the all_subreddits file and
+    that file is saved.
+    """
+
     if not subreddit:
 
         if all_subreddits:
             subreddit = all_subreddits
         
         else:
-            sys.exit(f"❗❗❗ Error! List of subreddits not found at {path_to_subreddits}."
-                     f"If the file exists elsewhere, move it to the correct folder or change the "
-                     f"path in the source file. Otherwise, you must manually specify a subreddit "
-                     f"to search.")
-
+            sys.exit(f"❗❗❗ Error! New all_subreddit set generated but no subreddits "
+                     f"specified in the command line. Please specify at least one subreddit "
+                     f"or add a set of subreddits at: {path_to_subreddits}")
+    
     else:
         length_of_search = len(all_subreddits)
 
@@ -72,6 +78,15 @@ def reddit_scrape(subreddit = None, search_term = None,
 
         if length_of_search < len(all_subreddits):
             safe_saver(all_subreddits, path_to_subreddits)
+
+    """
+    This will load in a file with every previous query if there is one,
+    and then add the current query to the file and save it. If no such
+    file exists, one will be created. Both of these are designed as a
+    way to remember what queries and subreddits were searched, but also
+    as a convenient way to have prespecified subreddits and queries
+    to search all of them at once.
+    """
 
     path_to_search_terms = 'data/raw/reddit_search_terms.pkl'
 
@@ -90,10 +105,10 @@ def reddit_scrape(subreddit = None, search_term = None,
             search_term = all_search_terms
 
         else:
-            sys.exit(f"❗❗❗ Error! List of search terms not found at {path_to_search_terms}."
-                     f"If the file exists elsewhere, move it to the correct folder or change the "
-                     f"path in the source file. Otherwise, you must manually specify a search term "
-                     f"to search.")
+            sys.exit(f"❗❗❗ Error! No search term was specified in the query after "
+                     f"a new cache for search terms was created. Please specify a search "
+                     f"term in the command line or add a file with search terms in it "
+                     f"at: {path_to_search_terms}")
 
     else:
         length_of_search = len(search_term)
@@ -119,8 +134,8 @@ def reddit_scrape(subreddit = None, search_term = None,
         cache = set()
 
     """
-    sorts through each post, under the defined subreddit, with the defined
-    search term
+    sorts through each post, under the defined subreddit(s), with the defined
+    search term(s).
     """
 
     path_to_results = 'data/raw/reddit_results.parquet'
@@ -132,6 +147,14 @@ def reddit_scrape(subreddit = None, search_term = None,
         all_data = pd.DataFrame()
 
     for sub in subreddit:
+        """
+        The following chunk will look through each specified subreddit and each search term,
+        add post.id to the cache (or skip if it's in the cache), extract the body, id, score,
+        author, etc., and will then get top level replies, the scores, the time of post, etc.,
+        and in an additional column, replies to replies will be appended as a list that contains
+        reply body, score, date of post, etc. This can be unpacked later if you wish to get
+        all the replies to each reply.
+        """
 
         for term in search_term:
             data = []
@@ -193,7 +216,7 @@ def reddit_scrape(subreddit = None, search_term = None,
 
                 except prawcore.exceptions.TooManyRequests:
                     wait_time = 2 ** attempt
-                    print(f"Server Error. Too many requests. Retrying after {wait_time} seconds.")
+                    print(f"Too many requests. Retrying after {wait_time} seconds.")
 
                 except Exception as e:
                     wait_time = 2 ** attempt
@@ -221,6 +244,10 @@ def reddit_scrape(subreddit = None, search_term = None,
                       f"Results file and cache successfully updated.")            
 
     if not all_data.empty:
+        """
+        After saving the file and searching through a specified subreddits,
+        the total number of unique posts and comments found is printed.
+        """
 
         unique_posts = len(set(all_data['post_id']))
         all_posts = all_data['comments'].sum()

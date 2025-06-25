@@ -5,8 +5,13 @@ from browser_scraping_functions import human_sleep, random_mouse_move, random_mo
 import random
 import argparse
 import os
+import sys
 
 def search_threads(keyword = None, max_posts = 300):
+    """
+    Opens up a cache of searched posts. If none exists, it
+    creates a new set.
+    """
 
     path_to_cache = 'data/raw/threads_cache.pkl'
 
@@ -19,6 +24,11 @@ def search_threads(keyword = None, max_posts = 300):
     else:
         cache = set()
 
+    """
+    Loads a cache of post_codes for later scraping.  If no such cache exists
+    already, it creates one.
+    """
+
     path_to_codes = 'data/raw/threads_post_ids.pkl'
 
     if os.path.exists(path_to_codes):
@@ -30,15 +40,24 @@ def search_threads(keyword = None, max_posts = 300):
     else:
         post_codes = set()
 
+    """
+    Loads in the previously generated auth_state.
+    """
+
     path_to_state = 'data/raw/threads_auth_state.json'
     
     if os.path.exists(path_to_state):
         auth_state = safe_loader(path_to_state)
 
     else:
-        print(f"❗❗❗Error. Browser save state not found at: {path_to_state}. "
-              f"Please check directory or run threads_get_login.py to "
-              f"generate a new save state.")
+        sys.exit(f"❗❗❗Error. Browser save state not found at: {path_to_state}. "
+                 f"Please check directory or run threads_get_login.py to "
+                 f"generate a new save state.")
+        
+    """
+    Loads in previously defined search terms if no keyword is defined.
+    If there is no search_terms file and no keyword, script exits.
+    """
 
     path_to_searches = 'data/raw/general_search_terms.pkl'
 
@@ -48,17 +67,27 @@ def search_threads(keyword = None, max_posts = 300):
             searches = safe_loader(path_to_searches)
 
         else:
-            print(f"❗❗❗Error. List of search terms not found at: "
-                  f"{path_to_searches}. Please check create a list "
-                  f"of searches or enter an argument with --keyword.")
+            sys.exit(f"❗❗❗Error. List of search terms not found at: "
+                     f"{path_to_searches}. Please check create a list "
+                     f"of searches or enter an argument with --keyword.")
 
     else:
         searches = keyword
 
+    """
+    Runs the searches specified in a headed browser because it is slightly
+    more stealth than a headless browser. The script will cycle through
+    keywords and use the search function to search for each keyword.
+    This extracts from the script all post ids that begin with /post/
+    and do not end in /media. It stores those and saves them as a .pkl.
+    It will notify you of how many posts were found at the end of each
+    keyword search.
+    """
+
     all_posts_found = set()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless = False)  # Set headless=True for background run
+        browser = p.chromium.launch(headless = False)
         context = browser.new_context(storage_state = auth_state)
         page = context.new_page()
 
@@ -123,10 +152,16 @@ def search_threads(keyword = None, max_posts = 300):
           f"investigation.")
 
 if __name__ == '__main__':
+    """
+    Simple ArgumentParser.
+        --keyword: Takes a keyword argument that can be multiple keywords, if none is specified
+                   script will attempt to load a pkl of search terms.
+        --max_posts: for each search, how many posts do you want to collect? Default: 300.
+    """
 
     parser = argparse.ArgumentParser(description = 'search for threads.')
     parser.add_argument('--keyword', nargs='+', help = 'Optional. Keyword(s) to search for. If None, a list of searches is loaded and searched for')
-    parser.add_argument('--max_posts', type = int, default = 300, help = 'Optional, default is 5. How many post ids to scrape.')
+    parser.add_argument('--max_posts', type = int, default = 300, help = 'Optional, default is 300. How many post ids to scrape.')
 
     arg = parser.parse_args()
 

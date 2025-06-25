@@ -1,14 +1,23 @@
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
-from shared_functions import safe_saver, safe_loader
+from shared_functions import safe_saver, safe_loader, to_utc_iso
+from datetime import datetime
 import json
 import pandas as pd
 import argparse
 import os
+import sys
 
 def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
                     before = None, after = None):
+
+    """
+    This loads in previous search terms, if none exists, it creates
+    and empty set of search terms. If the current search term is
+    not in the set of search terms, it adds it and saves it.
+    This acts as a record of all previous search terms.
+    """
 
     path_to_search_terms = 'data/raw/youtube_search_terms.pkl'
 
@@ -26,6 +35,11 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
         all_search_terms.add(query)
         safe_saver(all_search_terms, path_to_search_terms)
 
+    """
+    Loads in the google api key and builds the youtube scraper.
+    Sets the parameters for the search.
+    """
+
     load_dotenv()
     api_key = os.getenv('GOOGLE_KEY')
     youtube = build('youtube', 'v3', developerKey = api_key)
@@ -37,10 +51,27 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
         'type': 'video'
     }
 
+    """
+    Sets a date before and/or after if specified by in the argument.
+    """
+
     if before:
-        params['publishedBefore'] = to_utc_iso(before)
+        try:
+            date_obj = datetime.strptime(before, "%d-%m-%y")
+            params['publishedBefore'] = to_utc_iso(before)
+        except ValueError:
+            sys.exit("Invalid date format for --before. Please use DD-MM-YY.")
+
     if after:
-        params['publishedAfter'] = to_utc_iso(after)
+        try:
+            date_obj = datetime.strptime(after, "%d-%m-%y")
+            params['publishedBefore'] = to_utc_iso(after)
+        except ValueError:
+            sys.exit("Invalid date format for --after. Please use DD-MM-YY.")
+
+    """
+    Loads in or creates a cache of searched youtube videos.
+    """
 
     path_to_cache = 'data/raw/youtube_cache.pkl'
 
@@ -53,6 +84,13 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
     videos_fetched = 0
     next_page_token = None
 
+    """
+    This is the main function that will search through page results
+    and extract relevant information on the OP and the replies. It
+    will continue to fetch videos until either max_videos is reached
+    or there are no videos left.
+    """
+
     while videos_fetched < max_videos:
         if next_page_token:
             params['pageToken'] = next_page_token
@@ -60,10 +98,17 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
             params.pop('pageToken', None)
 
         remaining = max_videos - videos_fetched
+        """
+        This either sets the maxResults to 50 (the maximum for the API) or
+        the remaining videos left to find, whichever is lower.
+        """
         params['maxResults'] = min(50, remaining)
 
         search_response = youtube.search().list(**params).execute()
-
+        """
+        This pulls out the relevant videos from the search unless the
+        video is already in the cache, where it will skip over it.
+        """
         for item in search_response.get('items', []):
             video_id = item['id']['videoId']
 
@@ -82,12 +127,23 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
             if not video_response['items']:
                 continue
 
+            """
+            Gets relevant information, including video_info, id, title, location,
+            view count, and likes.
+            """
+
             video_info = video_response['items'][0]
             channel_id = video_info['snippet']['channelId']
             channel_title = video_info['snippet']['channelTitle']
             location = video_info.get('recordingDetails', {}).get('location', None)
             view_count = int(video_info['statistics'].get('viewCount', 0))
             like_count = int(video_info['statistics'].get('likeCount', 0))
+
+            """
+            This will either retrieve the lon/lat if it's available and if not,
+            set it to 0, 0. The processing script will ignore 0, 0 inputs when
+            using a geolocator.
+            """
 
             if location:
                 lat = location.get('latitude', 0)
@@ -97,9 +153,14 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
                 lon = 0
 
             channel_response = youtube.channels().list(
-                part='snippet,statistics',
-                id=channel_id
+                part = 'snippet,statistics',
+                id = channel_id
             ).execute()
+
+            """
+            Gets summary information about the video, such as date, description, hashtags,
+            and location, if available.
+            """
 
             channel_info = channel_response['items'][0]
             country = channel_info['snippet'].get('country', 'N/A')
@@ -110,12 +171,17 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
 
             comments_next_page_token = None
 
+            """
+            This chunk goes through the comments to extract their content, like count,
+            date, and so forth for recording.
+            """
+
             try:
                 comments_response = youtube.commentThreads().list(
-                    part='snippet',
-                    videoId=video_id,
-                    maxResults=max_comments,
-                    textFormat='plainText'
+                    part = 'snippet',
+                    videoId = video_id,
+                    maxResults = max_comments,
+                    textFormat = 'plainText'
                 ).execute()
                 
             except HttpError as e:
@@ -163,6 +229,15 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
         next_page_token = search_response.get('nextPageToken')
         if not next_page_token:
             break
+
+    """
+    Creates a df that has the video information in it with the information
+    for each comment on that video as a seperate row. This maintains the
+    connection between the original video and the replies if it becomes
+    relevant for the user to make that association. The loads and appends
+    the results file if it exists, otherwise, it creates a new file and
+    saves it.
+    """
 
     all_rows = []
 
@@ -217,7 +292,13 @@ def youtube_scraper(query = None, max_videos = 100, max_comments = 100,
         print(f"No results found for {query}")
 
 if __name__ == '__main__':
-
+    """
+    Arguments:
+        --query: what to search youtube for.
+        --videos: Max videos to search.
+        --before: fetch videos before a specified date.
+        --after: fetch videos after a specified date.
+    """
     parser = argparse.ArgumentParser(description = 'query for YouTube search.')
     parser.add_argument('--query', required = True,
                         help = 'Required. What to search YouTube for.')
