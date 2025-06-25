@@ -1,36 +1,20 @@
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.chains.question_answering import load_qa_chain
-from typing import List, TypedDict, Literal
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableConfig
-from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
-from langgraph.graph import START, END, StateGraph
-from langchain.chains.llm import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain.schema import Document
-from dotenv import load_dotenv
+from langgraph.graph import START, StateGraph
 import shared_functions
+import rag_functions
 import argparse
+import rag_functions
 import os
-
-import asyncio
-import operator
-from typing import List, Literal, TypedDict
-
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
-from langgraph.constants import Send
-from langgraph.graph import END, START, StateGraph
+import sys
 
 path_to_processed = 'data/processed'
 path_to_rag = 'data/RAG'
 
 def build_prompt():
-    
+    """
+    Builds the initial prompt for the LLM and the refine prompt used for chaining prompts and refining responses.
+    """
 
     initial_prompt_template = """
         You are an expert assistant. Use the provided context to answer the question as accurately and thoroughly as possible.
@@ -91,21 +75,41 @@ def build_prompt():
 
 def RAG(question, k = 500):
 
+    """
+    Checks for the RAG prompt files and exists if they do not exist. The loading function will alert the
+    user which files are missing.
+    """
+
+    if not os.path.exists(f"{path_to_processed}/RAG_initial_prompt.pkl") or not os.path.exists(f"{path_to_processed}/RAG_refine_prompt.pkl"):
+        sys.exit(f"Please ensure you generate the initial and refine prompts using the --build function and that "
+                 f"the files are present in {path_to_processed}.")
+        
+    """
+    Loads in the embedding model and the FAISS archive, sets up the retriever and then generates the docs
+    based on the question the user asked.
+    """
+
     embedding_model = HuggingFaceEmbeddings(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
     archive = FAISS.load_local(f"{path_to_rag}/complete_faiss_archive", embeddings = embedding_model,
                                allow_dangerous_deserialization = True)
 
-    load_dotenv()
-    api_key = os.getenv('OPENAI_KEY')
-
-    retriever = archive.as_retriever(search_kwargs={'k': k})
+    retriever = archive.as_retriever(search_kwargs = {'k': k})
     docs = retriever.invoke(question)
+
+    """
+    This processes the metadata and batches. Because I felt it makes more sense to give the LLM more than
+    one comment at a time to ensure more context and better, quicker summaries, I connect 100 comments at
+    a time and produce a list that will be passed using the state dictionary. Each chunk is processed
+    and metadata is appended in the 'Sources' section which includes the index in the data frame, the
+    original text, the source, and the date. Date is converted to .isoformat() for .json serialization.
+    """
 
     batched_metadata = {'Question' : question,
                         'Answer' : '',
                         'Hash' : '',
                         'Sources' : {}}
-    
+
+
     batches = []
 
     for doc_batch in range(0, len(docs), 100):
@@ -125,57 +129,35 @@ def RAG(question, k = 500):
                 'source': doc.metadata.get('source', 'Unknown'),
                 'date': date.isoformat()}
 
-    llm = ChatOpenAI(openai_api_key = api_key, model_name = "gpt-4o", temperature = 0.2)
-    initial_prompt_template = shared_functions.safe_loader(f"{path_to_processed}/RAG_initial_prompt.pkl")
-    refine_prompt_template = shared_functions.safe_loader(f"{path_to_processed}/RAG_refine_prompt.pkl")
-
-    class State(TypedDict):
-        contents: List[str]
-        index: int
-        summary: str
+    """
+    Sets up the initial state dictionary and initiates the workflow graph using the State class.
+    then adds nodes for the initial summary and the refine summary nodes. An edge is created
+    at the initial_summary node and conditional edges are drawn between initial_summary
+    and refine_summary node based on the should_refine function. The graph is then compiled.
+    """
 
     state = {'contents': batches,
              'index': 0,
-             'summary': ''}
+             'summary': '',
+             'question': question}
 
-    summarize_prompt = ChatPromptTemplate([('human', initial_prompt_template)])
-    initial_summary_chain = summarize_prompt | llm | StrOutputParser()
-
-    refine_prompt = ChatPromptTemplate([('human', refine_prompt_template)])
-    refine_summary_chain = refine_prompt | llm | StrOutputParser()
-
-    async def generate_initial_summary(state: State, config: RunnableConfig):
-        summary = await initial_summary_chain.ainvoke({'context' : state['contents'][0],
-                                                       'question' : question}, config)
-        return {'summary': summary, 'index': 1}
-
-    async def refine_summary(state: State, config: RunnableConfig):
-        content = state['contents'][state['index']]
-        summary = await refine_summary_chain.ainvoke(
-            {'existing_answer': state['summary'], 'context': content,
-             'question' : question},
-            config,
-        )
-        return {'summary': summary, 'index': state['index'] + 1}
-
-    def should_refine(state: State) -> Literal['refine_summary', END]:
-        return END if state['index'] >= len(state['contents']) else 'refine_summary'
-
-    graph = StateGraph(State)
-    graph.add_node('generate_initial_summary', generate_initial_summary)
-    graph.add_node('refine_summary', refine_summary)
+    graph = StateGraph(rag_functions.State)
+    graph.add_node('generate_initial_summary', rag_functions.generate_initial_summary)
+    graph.add_node('refine_summary', rag_functions.refine_summary)
     graph.add_edge(START, 'generate_initial_summary')
-    graph.add_conditional_edges('generate_initial_summary', should_refine)
-    graph.add_conditional_edges('refine_summary', should_refine)
+    graph.add_conditional_edges('generate_initial_summary', rag_functions.should_refine)
+    graph.add_conditional_edges('refine_summary', rag_functions.should_refine)
     app = graph.compile()
 
-    def run_langgraph(app, state):
-        async def inner():
-            final_state = await app.ainvoke(state)
-            return final_state['summary']
-        return asyncio.run(inner())
+    """
+    The answer is generated using the run_langgraph() function and the answer is printed
+    to the console. The final answer is saved to the batched metadata as is the hash
+    generated based on the question. The entire metadata for the batch is saved as a .json.
+    A hash function was used to generate the file names to avoid collisions or multiple
+    files potentially having the same name.
+    """
     
-    answer = run_langgraph(app, state)
+    answer = rag_functions.run_langgraph(app, state)
     print('Answer:', answer)
 
     key = shared_functions.hash_question(question)

@@ -88,7 +88,17 @@ def safe_loader(path):
     return None
 
 def hash_question(question):
+    """
+    Simple function used to generate a hash based on the input question.
+    """
     return hashlib.sha256(question.encode('utf-8')).hexdigest()
+
+"""
+All of the preprocessing functions below are described in more detail in the file
+data_formatting_pipeline.py, which can be found in the formatting folder. This is
+a slightly simplified version as it does not process a whole dataframe and does not
+do things like geolocations.
+"""
 
 def preprocess_data(text):
 

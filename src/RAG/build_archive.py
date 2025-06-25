@@ -69,6 +69,9 @@ def build_database():
     print('Building FAISS Archive...')
     faiss_archive = FAISS.from_documents(documents, embedding_function)
     faiss_archive.save_local(f"{path_to_RAG}/complete_faiss_archive")
+
+    
+
     print('Archive successfully built and saved!')
 
 if __name__ == '__main__':
