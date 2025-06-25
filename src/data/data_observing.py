@@ -3,6 +3,13 @@ import datetime
 from shared_functions import safe_saver, safe_loader
 
 def data_observing():
+    """
+    Simple script to print out some basic statistics about the dataset and to save the number
+    of posts to a .pkl file so that it can be easily plotted later. This file loads in
+    the Reddit, YouTube, and Threads data, finds the number of top level posts (OPs) and
+    the number of replies. It additionally finds the newest and oldest comment in each dataset
+    and prints those values.
+    """
 
     reddit_data = pd.read_parquet('data/raw/reddit_results.parquet')
 

@@ -6,6 +6,7 @@ import os
 import praw
 import prawcore
 import pandas as pd
+import sys
 
 def reddit_scrape(subreddit = None, search_term = None,
                   limit = 2000, comments = 50):
@@ -37,7 +38,10 @@ def reddit_scrape(subreddit = None, search_term = None,
     reddit.config._allow_nsfw = True
 
     """
-
+    This loads in a previously defined set of all subreddits to be searched.
+    If none exists, it creates one. If one is created and no subreddit is
+    specified in the command line, then the script notifies you of the error
+    and exits the script.
     """
 
     path_to_subreddits = 'data/raw/reddit_subreddits.pkl'
@@ -56,12 +60,10 @@ def reddit_scrape(subreddit = None, search_term = None,
             subreddit = all_subreddits
         
         else:
-            print(f"❗❗❗ Error! List of subreddits not found at {path_to_subreddits}."
-                  f"If the file exists elsewhere, move it to the correct folder or change the "
-                  f"path in the source file. Otherwise, you must manually specify a subreddit "
-                  f"to search.")
-
-            return None
+            sys.exit(f"❗❗❗ Error! List of subreddits not found at {path_to_subreddits}."
+                     f"If the file exists elsewhere, move it to the correct folder or change the "
+                     f"path in the source file. Otherwise, you must manually specify a subreddit "
+                     f"to search.")
 
     else:
         length_of_search = len(all_subreddits)
@@ -88,12 +90,10 @@ def reddit_scrape(subreddit = None, search_term = None,
             search_term = all_search_terms
 
         else:
-            print(f"❗❗❗ Error! List of search terms not found at {path_to_search_terms}."
-                  f"If the file exists elsewhere, move it to the correct folder or change the "
-                  f"path in the source file. Otherwise, you must manually specify a search term "
-                  f"to search.")
-
-            return None
+            sys.exit(f"❗❗❗ Error! List of search terms not found at {path_to_search_terms}."
+                     f"If the file exists elsewhere, move it to the correct folder or change the "
+                     f"path in the source file. Otherwise, you must manually specify a search term "
+                     f"to search.")
 
     else:
         length_of_search = len(search_term)
