@@ -10,6 +10,11 @@ import argparse
 path_to_processed = 'data/processed/'
 
 def frequency_grouping():
+    """
+    This uses DBScan and embeddings to find counts for similar comments.
+    Comments that are clustered together in the DBScan space are assumed
+    to be similar in nature.
+    """
 
     data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
@@ -17,6 +22,11 @@ def frequency_grouping():
     model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2', device = device)
 
     results = []
+
+    """
+    for each unique topic, subsets the data to include just that topic and finds
+    comments that cluster together.
+    """
 
     for topic in data['topic'].unique():
         subset = data[data['topic'] == topic].copy()
@@ -29,20 +39,40 @@ def frequency_grouping():
 
         results.extend(zip(index, labels))
 
+    """
+    Creates a dataframe of the results from DBScan and sorts by index so they can be correctly
+    added to the master data.
+    """
+
     results_df = pd.DataFrame(results, columns = ['index', 'labels']).set_index('index').sort_index()
     data['labels'] = results_df['labels']
 
     data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
 def scoring():
+    """
+    This groups all the data by topic and labels, i.e., the BERTopic defined topics and the
+    clusters found from DBScan within those topics. Then the sum of likes and the count
+    are created with the aggregate function.
+    """
 
     data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
     scalar = 1
 
     grouped_data = data.groupby(['topic', 'labels']).agg(likes = ('likes', 'sum'), count = ('labels', 'size')).reset_index()
-    grouped_data['log_likes'] = np.log1p(grouped_data['likes'])
+    """
+    Creates log_likes and log_count to reduce the effect of viral posts and content.
+    Then scoring is done with a simple formula:
+
+        log(likes) + α ⋅ log(count)
+
+    This formula permits more heavy weighting of likes or frequency count, but for this
+    project, I kept the weight at 1. Saves the scoring as a .csv and then adds a 'score'
+    column to the dataset and saves it.
+    """
     grouped_data['log_count'] = np.log1p(grouped_data['count'])
+    grouped_data['log_likes'] = np.log1p(grouped_data['likes'])
     grouped_data['score'] = grouped_data['log_likes'] + scalar * grouped_data['log_count']
     grouped_data.sort_values(['topic', 'score'], ascending = False, inplace = True)
     grouped_data.to_csv(f"{path_to_processed}/scores.csv")
@@ -54,47 +84,6 @@ def scoring():
 
     data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
-def find_themes():
-
-    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
-
-    themes = {}
-    topics = sorted(data['topic'].unique())
-
-    for index, topic in enumerate(topics, start = 1):
-
-        print(f"Processing topic {index} of {len(topics)}...")
-
-        temp = data[data['topic'] == topic].copy()
-        themes[topic] = shared_functions.get_keywords(temp['text'], temp['labels'], temp['score'], top_n = 20, top_score = 10)
-
-    themes_df = pd.DataFrame(themes)
-
-    themes_df.to_csv(f"{path_to_processed}/themes.csv")
-
-def example_text():
-
-    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
-
-    zipped = list(zip(data['topic'], data['labels']))
-    unique_combos = np.unique(zipped, axis = 0)
-    unique_combos = [tuple(row) for row in unique_combos]
-
-    for topic, label in unique_combos:
-
-        temp = data[(data['topic'] == topic) & (data['labels'] == label)]
-        ranked_scores = sorted(temp['score'].unique(), reverse = True)
-        temp = temp[temp['score'].isin(ranked_scores[0:10])]
-        n_samples = min(10, len(temp))
-        choice = np.random.choice(temp.index, replace = False, size = n_samples)
-        temp = temp.loc[choice]
-
-        print(f"Example text from topic: {topic}; label: {label}")
-        for item in temp['text']:
-            print(item)
-            print('\n\n\n\n\n--------------------\n\n\n\n\n')
-        print(choice)
-
 def run_function(function):
 
     match function:
@@ -102,14 +91,10 @@ def run_function(function):
             frequency_grouping()
         case 'score':
             scoring()
-        case 'theme':
-            find_themes()
-        case 'example':
-            example_text()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'parser for scoring functions')
-    parser.add_argument('--function', default = 'score', help = 'freq, score, theme, or example.')
+    parser.add_argument('--function', default = 'score', help = 'freq or score.')
 
     arg = parser.parse_args()
 

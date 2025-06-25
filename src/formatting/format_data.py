@@ -180,9 +180,7 @@ def create_masterdata():
     data.reset_index(drop = True, inplace = True)
     """
     There were a few likes errors in the data, so I coerce them to numeric,
-    clip the lower bound to 0, fill any NAs as 0, and do np.log1p to make
-    a log_likes column for later scoring. Log likes is used to reduce the
-    scoring impact of incredibly viral posts. Converts the date-time to
+    clip the lower bound to 0, fill any NAs as 0. Converts the date-time to
     just the year and month of post. This makes time analysis easier because
     more general trends are desired, and further anonymizes the data, complying
     with GDPR and DSGVO regulations.
@@ -190,7 +188,6 @@ def create_masterdata():
     data['likes'] = pd.to_numeric(data['likes'], errors = 'coerce')
     data['likes'] = data['likes'].clip(lower = 0)
     data['likes'] = data['likes'].fillna(0).astype(int)
-    data['log_likes'] = np.log1p(data['likes'])
     data['month_year'] = data['date'].dt.to_period('M').astype(str)
 
     """

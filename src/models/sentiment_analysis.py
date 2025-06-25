@@ -10,6 +10,13 @@ import argparse
 path_to_processed = 'data/processed'
     
 def sentiment_analysis():
+    """
+    Loads in the data and 'nlptown/bert-base-multilingual-uncased-sentiment' for
+    sentiment analysis. This is an accurate but relatively slow model compared
+    to 'cardiffnlp/twitter-xlm-roberta-base-sentiment', therefore, if you have
+    a very large dataset, you may consider using a different model, but some
+    coding will need to be changed, namely the mapping of sentiment labels.
+    """
 
     data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata.parquet")
 
@@ -20,6 +27,13 @@ def sentiment_analysis():
     model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
 
     print('Analyzing sentiment...')
+
+    """
+    Sets up the cleaned text, and records all predictions and probabilities.
+    Passes the text through the model in batches of 256. The probabilities
+    are not saved, but can be easily saved if you wish to have that data.
+    Assigns the predictions to a column in the dataset.
+    """
 
     all_preds = []
     all_probs = []
@@ -57,6 +71,11 @@ def sentiment_analysis():
     data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment.parquet")
 
 def topics():
+    """
+    This uses BERTopic to find clustering of general trends or themes in the data
+    using the embeddings, saves those to a 'topics' column and prints a bar chart
+    of the topics found.
+    """
 
     data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment.parquet")
 
@@ -69,7 +88,7 @@ def topics():
     print('Analyzing topics...')
     
     topics, probs = topic_model.fit_transform(docs, embeddings = comment_embeddings)
-    data['topic_label'] = topics
+    data['topics'] = topics
 
     topics_info = topic_model.get_topic_info()
 
@@ -79,29 +98,6 @@ def topics():
     fig = topic_model.visualize_barchart()
     fig.write_html('images/masterdata_topics.html')
 
-def sentiment_text():
-
-    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
-
-    data = data[['topic_label', 'sentiment_label', 'text', 'likes']]
-    data.to_csv('data/processed/filtered_masterdata_sentiment_topics.csv')
-
-    for topic in data['topic_label'].unique():
-        temp = data[data['topic_label'] == topic]
-        negative = temp[temp['sentiment_label'] == -1]
-        positive = temp[temp['sentiment_label'] == 1]
-        if not negative.empty:
-            negative = np.random.choice(negative['text'], 10)
-            print('Negative comments:\n', negative)
-        else:
-            print(f"No negative comments found for topic #{topic}.")
-        if not positive.empty:
-            positive = np.random.choice(positive['text'], 10)
-            print('Positive comments:\n', positive)
-        else:
-            print(f"No positive comments found for topic #{topic}.")
-
-
 def arg_parse(function):
 
     match function:
@@ -109,12 +105,10 @@ def arg_parse(function):
             sentiment_analysis()
         case 'topic':
             topics()
-        case 'text':
-            sentiment_text()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Just a simple argument parser.')
-    parser.add_argument('--function', required = True, help = 'Choose either analysis, topic, text.')
+    parser.add_argument('--function', required = True, help = 'Choose either analysis or topic.')
        
     arg = parser.parse_args()
 

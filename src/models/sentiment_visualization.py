@@ -12,31 +12,12 @@ import argparse
 
 path_to_processed = 'data/processed'
 
-def sentiment_visualization():
-
-    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment.parquet")
-    topic_names = shared_functions.safe_loader(f"{path_to_processed}/topic_names.pkl")
-    warranties = data[data['topic_label'] != -1]
-    topics = warranties.groupby('topic_label').agg({'sentiment_label' : 'mean'})
-
-    fig = plt.figure(figsize = (10, 10))
-    bars = plt.bar(topics.index, topics['sentiment_label'])
-    
-    for bar in bars:
-        height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2,  height + 0.01,
-            f'{height:.3f}', ha = 'center', va = 'bottom', color = 'black',
-            fontweight = 'bold')
-    plt.xticks([1, 2, 3, 4, 5], topic_names,
-               rotation = 45, ha = 'right', rotation_mode = 'anchor')
-    plt.ylabel('Sentiment')
-    plt.title('Average Sentiment for each Topic')
-    plt.ylim(-0.5, 0.5)
-    plt.tight_layout()
-
-    plt.savefig('images/sentiment_analysis_overview.png')
-
 def sentiment_world_map():
+    """
+    This creates a world map with sentiment by topic. The world map is loaded and a column
+    'region' is added to the world map by converting the country names into relevant
+    regions using the .map() function. Loads in the topic names.
+    """
 
     data = pd.read_parquet('data/processed/cleaned_masterdata_sentiment.parquet')
     data = data[data['topic_label'] != -1]
@@ -45,6 +26,12 @@ def sentiment_world_map():
     world['region'] = world['NAME'].map(map_conversions)
     topics = shared_functions.safe_loader(f"{path_to_processed}/topic_names.pkl")
     topic_ids = sorted(data['topic_label'].unique())
+
+    """
+    For each topic, the aggregated data is aggregated to a mean for that region, and
+    then merged with the world map. The map is then plotted with hatching for regions
+    with no data and reverse coolwarm mapping.
+    """
 
     for index, topic_id in enumerate(topic_ids):
         df_topic = data[data['topic_label'] == topic_id]
@@ -67,12 +54,20 @@ def sentiment_world_map():
                 "label": "No data"
             }
         )
-        
+        """
+        Uses both margins(0) and tight_layout() to get a clean and compact image.
+        """
         ax.margins(0)
         plt.title(f"{topics[index]}", fontsize = 16)
         plt.axis('off')
         plt.tight_layout()
         plt.savefig(f'images/world_sentiment_{topic_id}.png', bbox_inches = 'tight', pad_inches = 0.05)
+
+    """
+    Creates an aggregated sentiment without regional considerations for each topic and
+    plots a barplot for the sentiment of each topic. Adds font with the bar value to the
+    bar.
+    """
 
     aggregated_sentiment = data.groupby('topic_label').agg({'sentiment_label' : 'mean'})
 
@@ -95,6 +90,11 @@ def sentiment_world_map():
     plt.savefig('images/sentiment_overview.png')
 
 def time_sentiment():
+    """
+    This function does a sentiment overtime and uses the Mann-Kendall test to determine
+    if there is a trend in the data. First I ensure all the timestamps are correctly
+    formatted, then aggregate mean sentiment by topic and year-month.
+    """
 
     data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
     topics = shared_functions.safe_loader(f"{path_to_processed}/topic_names.pkl")
@@ -102,6 +102,13 @@ def time_sentiment():
 
     monthly_data = data.groupby(['topic', 'year_month']).agg({'sentiment' : 'mean'}).reset_index()
     monthly_data.sort_values(['topic', 'year_month'], inplace = True)
+
+    """
+    This sets a cutoff date. I chose 2020 because more recent trends were more relevant
+    rather than the overall trend since the beginning of the data. This subsets the data
+    to that timeframe. It also changes the order here of the topics so that the plotting
+    of the overall image is laid out in the order I required.
+    """
 
     year = '2020'
 
@@ -112,6 +119,10 @@ def time_sentiment():
     topic = sorted(monthly_data['topic'].unique())
     colors = ['#006868ff', '#008181ff', '#0193a0ff', '#01d1d1ff', '#1bd9c5ff']
 
+    """
+    Creates a subplot and creates a flat object for easy subplotting.
+    """
+
     fig, ax = plt.subplots(2, 2, figsize = (20, 10))
 
     for index, axes in enumerate(ax.flat):
@@ -120,6 +131,14 @@ def time_sentiment():
             axes.spines[spine].set_visible(False)
 
         temp = monthly_data[monthly_data['topic'] == topic[index]].copy()
+        """
+        Converts the year-month format to a usable x_coordinate for plotting text.
+        Then I do the Mann-Kendall test to analyze the trend. The overall trend
+        is also smoothed, because the values are generally prone to sharp moves
+        because the original values were just -1, 0, 1, so even with aggregation
+        there can be a lot of sharp spikes. The lowess function makes it a bit easier
+        to see the trends.
+        """
         x_coord = mdates.date2num(temp['year_month'].iloc[0])
 
         result = mk.original_test(temp['sentiment'])
@@ -130,10 +149,20 @@ def time_sentiment():
         axes.plot(pd.to_datetime([pd.Timestamp.fromordinal(int(x)) for x in smoothed[:, 0]]),
                 smoothed[:, 1], label = 'Lowess Smoothed', color = colors[index])
 
+        """
+        I had to do this because on the first plot I wanted different y_coords to avoid
+        overlapping with the smooth.
+        """
+
         if index == 0:
             y_coords = [0.25, 0.175, 0.1]
         else:
             y_coords = [0.9, 0.825, 0.75]
+
+        """
+        Plots the mk results on the plot, namely, the slope and p-value. The slope was used
+        to calculate the change in sentiment over the past 5 years.
+        """
 
         axes.text(x_coord, y_coords[0], f"Slope: {round(result.slope, 4)}", fontsize = 16, fontname = 'Arial')
         axes.text(x_coord, y_coords[1], f"p-value: {round(result.p, 4)}", fontsize = 16, fontname = 'Arial')
@@ -147,6 +176,10 @@ def time_sentiment():
     plt.savefig(f"images/sentiment_over_time_{year}.png")
 
 def token_count():
+    """
+    This takes the saved .pkl file from the data_observing.py file and makes a simple
+    bar chart to show how much data was collected from each source.
+    """
 
     counts = shared_functions.safe_loader(f"{path_to_processed}/comment_counts.pkl")
 
@@ -182,6 +215,9 @@ def token_count():
     plt.savefig('images/counts_bar_plot.png')
 
 def scores():
+    """
+    This plots each of the scores for the identified pain points and drivers.
+    """
 
     scores = shared_functions.safe_loader(f"{path_to_processed}/pain_points_drivers_scores.pkl")
 
@@ -239,8 +275,6 @@ def scores():
 def arg_parse(function):
 
     match function:
-        case 'vis':
-            sentiment_visualization()
         case 'map':
             sentiment_world_map()
         case 'time':
@@ -252,7 +286,7 @@ def arg_parse(function):
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Just a simple argument parser.')
-    parser.add_argument('--function', required = True, help = 'Choose either vis, map, time, count, or score.')
+    parser.add_argument('--function', required = True, help = 'Choose either map, time, count, or score.')
     
     arg = parser.parse_args()
 

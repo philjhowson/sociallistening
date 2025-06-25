@@ -80,6 +80,11 @@ def safe_loader(path):
     return None
 
 def split_title(title):
+    """
+    Some of the sentiment titles are quite long and so they are split in half
+    with this function by taking all the words, splitting them, joining the
+    first half with a \n to break the line, then joined with the second half.
+    """
     words = title.split()
     half = len(words) // 2
     return " ".join(words[:half]) + "\n" + " ".join(words[half:])
