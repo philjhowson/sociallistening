@@ -30,6 +30,7 @@ path_to_processed = 'data/processed'
 path_to_rag = 'data/RAG'
 
 def build_prompt():
+    
 
     initial_prompt_template = """
         You are an expert assistant. Use the provided context to answer the question as accurately and thoroughly as possible.

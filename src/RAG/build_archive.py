@@ -12,6 +12,13 @@ path_to_processed = 'data/processed'
 path_to_RAG = 'data/RAG'
 
 def build_database():
+    """
+    Loads in the data and splits the text for document chunking. I used
+    RecursiveCharacterTextSplitter() because reddit often has very long posts
+    and it needs to be chunked in a way that the encoder won't truncate it.
+    It's also advantageous because often reddit posts are long, but only a
+    few sentences are of interest.
+    """
 
     data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
 
@@ -22,6 +29,12 @@ def build_database():
     documents = []
 
     print('Chunking comments for archive...')
+    """
+    This takes the chunks and cleans the text appropriately. I did this so I can
+    accurately extract which original comment refers to which document and keep
+    track of what the LLM actually receives as its input. For each row, relevant
+    information, such as 'text', 'date', and 'source' which will be used for metadata.
+    """
 
     for index, (idx, row) in enumerate(data.iterrows()):
 
@@ -44,6 +57,10 @@ def build_database():
                                                   'text' : chunk,
                                                   'date' : date,
                                                   'source' : source}))
+
+    """
+    Embeddings are generated and the FAISS archive is built and saved.
+    """
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     embedding_function = HuggingFaceEmbeddings(model_name = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
