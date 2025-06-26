@@ -1,9 +1,16 @@
 # Social Listening Project
+------------------------------------------------------------------------
+
+## Table of Contents
+- [Project Organization](#project-organization)
+- [Project Introduction](#project-introduction)
+- [Project Workflow](#project-workflow)
 
 **As a note, I will not explain the overall theme of the project
 or the specific results because this was completed for a client.
 As such, only the flow of the project and the methods used
-are discussed.**
+are discussed. I made every effort to mask theme specific queries,
+keywords, and results.**
 
 This project uses social listening methods, including publicly
 available APIs (Google and Reddit APIs) and playwright to automate
@@ -13,20 +20,18 @@ for extended services for electronic devices.
 
 To complete this project, I build an end-to-end data ingestion
 pipeline, including sentiment analysis and theme discovering.
-I further build a RAG model to extra key insights, i.e. pain points
+I further build a RAG model to extract key insights, i.e. pain points
 and drivers, to provide the client with actionable insights.
 
 ## Project Organization
-------------------------------------------------------------------------
     root
-    ├── data # not uploaded for coherance with DSGVO and GDPR regulations
+    ├── data # not uploaded for coherence with DSGVO and GDPR regulations
     │   ├── processed # processed data files
     │   ├── RAG # contains output files from RAG queries and FAISS archives    
     │   └── raw # the raw extracted social media content
     ├── images # images used to evaluate and visualize results, some anonymized images are presented
-    ├── src # contains source code for exploration, not stored on GitHub due to size limitations
+    ├── src
     │   ├── data # code for data ingestion
-    │   │    ├── create_train_test_split.py # creates the training, test, and validation indicies
     │   │    ├── browser_scraping_functions.py # functions used by playwright
     │   │    ├── reddit_scraper.py # script for scraping Reddit
     │   │    ├── shared_functions.py # functions used in multiple scraping scripts
@@ -48,7 +53,7 @@ and drivers, to provide the client with actionable insights.
     │        ├── rag_functions.py # functions used by the RAG model
     │        ├── run_rag.py # builds prompts and queries the database
     │        └── shared_functions.py # general functions for data formatting
-    ├── .env
+    ├── .env # stores API keys and other private information, not uploaded
     ├── .gitignore
     ├── LICENSE
     ├── README.md
@@ -105,7 +110,7 @@ all similar comments. Then a score was assigned using the following equation:
   <strong>log(likes) + α · log(frequency)</strong>
 </p>
 
-I used logarithmic scale to reduce the impact of viral viral posts. α represents
+I used logarithmic scale to reduce the impact of viral posts. α represents
 a scaler that can be used to weight either likes or comment frequency more
 heavily, although I used a scalar of one to provide equal weighting to likes
 and frequency.
@@ -134,4 +139,4 @@ difference.
 </div>
 
 The final step of the project was to build a RAG model to determine pain points and
-drivers to produce actionable insights. 
+drivers to produce actionable insights. I used `langchain` in conjunction with `FAISS` and the OpenAI API. In order to give the model more context per refine, 100 comments were connected and given to the model with the prompt. For refinement context, the previous answer and a new refine prompt was given. Temperature was set to 0.2 in order to limit AI hallucinations. Additionally, I cataloged each comment, the original index from the dataset, and other meta data, along with the answer and the question so that the sensibility of the answer could be verified. I then averaged scores across comments used in the development of each pain point and driver to rank relative importance.
