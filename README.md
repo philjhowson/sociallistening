@@ -32,7 +32,7 @@ and drivers, to provide the client with actionable insights.
     ├── images # images used to evaluate and visualize results, some anonymized images are presented
     ├── src
     │   ├── data # code for data ingestion
-    │   │    ├── browser_scraping_functions.py # functions used by playwright
+    │   │    ├── `browser_scraping_functions.py` # functions used by playwright
     │   │    ├── reddit_scraper.py # script for scraping Reddit
     │   │    ├── shared_functions.py # functions used in multiple scraping scripts
     │   │    ├── threads_get_login.py # script to save auth_state for Threads
