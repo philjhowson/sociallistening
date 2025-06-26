@@ -93,3 +93,45 @@ image of the distribution of cosine similarities for one topic.
 <div align="center">
   <img src = "images/cosine_similarities.png" alt = "Cosine Similarities Plot" height = "400"/>
 </div>
+
+After data filtering, I performed sentiment analysis with a BERT-multilingual
+model. Scores were normalized between -1 (most negative) to 1 (most positive)
+for ease of interpretation, and BERTopic was used to cluster similar comments
+and identify themes. Prior to scoring, I used DBSCAN to cluster similar comments
+together to achieve a frequency of comment metric and summed the likes across
+all similar comments. Then a score was assigned using the following equation:
+
+<p align = "center">
+  <strong>log(likes) + α · log(frequency)</strong>
+</p>
+
+I used logarithmic scale to reduce the impact of viral viral posts. α represents
+a scaler that can be used to weight either likes or comment frequency more
+heavily, although I used a scalar of one to provide equal weighting to likes
+and frequency.
+
+I then visualized the sentiment based on region as well as the sentiment across
+themes over the whole world. The image below presents the sentiment plot on a
+regional basis. This shows the sentiment for Topic 1 in each region where
+data was collected. Dark blue represents very positive sentiment and dark red
+represents very negative sentiment.
+
+<div align="center">
+  <img src = "images/world_sentiment_example.png" alt = "Cosine Similarities Plot" width = "400"/>
+</div>
+
+I was also interested to know how sentiment has changed over time. So, I performed
+a timeseries analysis and used the Mann-Kendall test to determine if there was
+a trend in the data. I used the Mann-Kendall test because of fluctuations in
+sentiment overtime were generally not conducive to using standard regression
+techniques. I extracted the slope and p-value for presentation and used the slope
+to determine how much sentiment had changed over the previous 5 years. The slope
+represents the monthly change and the change in sentiment represents the 5 year
+difference.
+
+<div align="center">
+  <img src = "images/sentiment_over_time_example.png" alt = "Cosine Similarities Plot" width = "300"/>
+</div>
+
+The final step of the project was to build a RAG model to determine pain points and
+drivers to produce actionable insights. 
