@@ -76,5 +76,20 @@ suitable for text embeddings. This followed a variety of best practices, includi
 removing punctuation and html tags, lemmatizing and standardizing text, lower casing,
 removing stop words, and other processes. Additionally, because this was a global
 scale project, it was necessary to identify comment languages to use appropriate stop
-word removal and lemmatization. I collected data from over 50 languages.
+word removal and lemmatization. I collected data from over 50 languages. The plot below presents a bar plot of the number of comments collected from each source.
 
+<div align="center">
+  <img src = "images/counts_bar_plot.png" alt = "Counts Plot" height = "300"/>
+</div>
+
+
+After formatting the data, I filtered the dataset to reduce the number of irrelevant comments
+and ensure the quality of the collected data. To this end, I wrote a series of sentences
+describing the relevant topics and used a multilingual text embedder to vectorize the
+text. Those embeddings were compared against text embeddings using cosine similarity. Comments
+below a threshold of 0.5 for all of the described topics were discarded. Below is an example
+image of the distribution of cosine similarities for one topic.
+
+<div align="center">
+  <img src = "images/cosine_similarities.png" alt = "Cosine Similarities Plot" height = "400"/>
+</div>
