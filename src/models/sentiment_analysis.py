@@ -65,8 +65,8 @@ def sentiment_analysis():
             all_preds.extend(preds.cpu().tolist())
             all_probs.extend(probs.cpu().numpy())
 
-    data['sentiment_label'] = all_preds
-    data['sentiment_label'] = data['sentiment_label'].map({0: -1, 1: -0.5, 2: 0, 3: 0.5, 4: 1})
+    data['sentiment'] = all_preds
+    data['sentiment'] = data['sentiment'].map({0: -1, 1: -0.5, 2: 0, 3: 0.5, 4: 1})
 
     data.to_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment.parquet")
 
@@ -88,7 +88,7 @@ def topics():
     print('Analyzing topics...')
     
     topics, probs = topic_model.fit_transform(docs, embeddings = comment_embeddings)
-    data['topics'] = topics
+    data['topic'] = topics
 
     topics_info = topic_model.get_topic_info()
 

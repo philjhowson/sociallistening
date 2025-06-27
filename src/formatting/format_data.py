@@ -356,13 +356,6 @@ def format_data(function):
             embeddings()
         case 'similarity':
             cosine_similarity()
-        case 'all':
-            preprocess_youtube()
-            preprocess_reddit()
-            preprocess_threads()
-            create_masterdata()
-            embeddings()
-            cosine_similarity()
 
 if __name__ == '__main__':
     """
@@ -373,8 +366,9 @@ if __name__ == '__main__':
                     cosine similarity to filter comments.
                     all to run everything.
     """
+    
     parser = argparse.ArgumentParser(description = 'prepare data for analysis')
-    parser.add_argument('--function', default = 'all', help = 'Default: "all", Options: "youtube", "reddit", or "threads" to prepare those datasets, "master" to create masterdata set from all datasets, "embeddings" to creating embeddings, "similarity" to do cosine similarity for comments, "all" to do all steps.')
+    parser.add_argument('--function', required = True, help = 'Options: "youtube", "reddit", or "threads" to prepare those datasets, "master" to create masterdata set from all datasets, "embeddings" to creating embeddings, "similarity" to do cosine similarity for comments, "all" to do all steps.')
 
     arg = parser.parse_args()
 

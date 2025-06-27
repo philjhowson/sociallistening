@@ -19,13 +19,14 @@ def sentiment_world_map():
     regions using the .map() function. Loads in the topic names.
     """
 
-    data = pd.read_parquet('data/processed/cleaned_masterdata_sentiment.parquet')
-    data = data[data['topic_label'] != -1]
+    data = pd.read_parquet('data/processed/cleaned_masterdata_sentiment_topics.parquet')
+    data = data[data['topic'] != -1]
+    data = data[data['date'] >= '2020-01-01']
     world = gpd.read_file('images/maps/ne_110m_admin_0_countries.shp')
     map_conversions = shared_functions.safe_loader('data/processed/map_conversions.pkl')
     world['region'] = world['NAME'].map(map_conversions)
     topics = shared_functions.safe_loader(f"{path_to_processed}/topic_names.pkl")
-    topic_ids = sorted(data['topic_label'].unique())
+    topic_ids = sorted(data['topic'].unique())
 
     """
     For each topic, the aggregated data is aggregated to a mean for that region, and
@@ -34,13 +35,13 @@ def sentiment_world_map():
     """
 
     for index, topic_id in enumerate(topic_ids):
-        df_topic = data[data['topic_label'] == topic_id]
-        agg = df_topic.groupby('region')['sentiment_label'].mean().reset_index()
+        df_topic = data[data['topic'] == topic_id]
+        agg = df_topic.groupby('region')['sentiment'].mean().reset_index()
 
         world_sentiment = world.merge(agg, how = 'left', left_on = 'region', right_on = 'region')
         fig, ax = plt.subplots(figsize = (15, 10))
         world_sentiment.plot(
-            column = 'sentiment_label',
+            column = 'sentiment',
             cmap = 'coolwarm_r',
             vmin = -1, vmax = 1, 
             legend = True,
@@ -69,11 +70,11 @@ def sentiment_world_map():
     bar.
     """
 
-    aggregated_sentiment = data.groupby('topic_label').agg({'sentiment_label' : 'mean'})
+    aggregated_sentiment = data.groupby('topic').agg({'sentiment' : 'mean'})
 
     fig = plt.figure(figsize = (10, 10))
 
-    bars = plt.bar(aggregated_sentiment.index, aggregated_sentiment['sentiment_label'])
+    bars = plt.bar(aggregated_sentiment.index, aggregated_sentiment['sentiment'])
 
     for bar in bars:
         height = bar.get_height()
@@ -82,6 +83,8 @@ def sentiment_world_map():
             f'{round(height, 2)}', ha = 'center', va = 'bottom',
             fontweight = 'bold'
         )
+
+    topics = topics[0:4]
 
     plt.xticks(aggregated_sentiment.index, topics, rotation = 45, ha = 'right', va = 'top')
     plt.ylabel('Sentiment')
@@ -96,7 +99,7 @@ def time_sentiment():
     formatted, then aggregate mean sentiment by topic and year-month.
     """
 
-    data = pd.read_parquet(f"{path_to_processed}/final_cleaned_data.parquet")
+    data = pd.read_parquet(f"{path_to_processed}/cleaned_masterdata_sentiment_topics.parquet")
     topics = shared_functions.safe_loader(f"{path_to_processed}/topic_names.pkl")
     data['year_month'] = data['date'].dt.to_period('M').dt.to_timestamp()
 
