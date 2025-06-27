@@ -21,7 +21,7 @@ def sentiment_world_map():
 
     data = pd.read_parquet('data/processed/cleaned_masterdata_sentiment_topics.parquet')
     data = data[data['topic'] != -1]
-    data = data[data['date'] >= '2020-01-01']
+
     world = gpd.read_file('images/maps/ne_110m_admin_0_countries.shp')
     map_conversions = shared_functions.safe_loader('data/processed/map_conversions.pkl')
     world['region'] = world['NAME'].map(map_conversions)
