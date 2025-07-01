@@ -94,7 +94,7 @@ def sentiment_world_map():
 
 def time_sentiment():
     """
-    This function does a sentiment overtime and uses the Mann-Kendall test to determine
+    This function does a sentiment overtime analysis and uses the Mann-Kendall test to determine
     if there is a trend in the data. First I ensure all the timestamps are correctly
     formatted, then aggregate mean sentiment by topic and year-month.
     """
