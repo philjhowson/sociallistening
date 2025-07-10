@@ -127,7 +127,7 @@ represents very negative sentiment.
 
 I was also interested to know how sentiment has changed over time. So, I performed
 a timeseries analysis and used the Mann-Kendall test to determine if there was
-a trend in the data. I used the Mann-Kendall test because of fluctuations in
+a trend in the data. I used the Mann-Kendall test because fluctuations in
 sentiment overtime were generally not conducive to using standard regression
 techniques. I extracted the slope and p-value for presentation and used the slope
 to determine how much sentiment had changed over the previous 5 years. The slope
