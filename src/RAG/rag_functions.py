@@ -27,9 +27,9 @@ class State(TypedDict):
     question: str
 
 """
-Loads in the env and API could and then loads in the initial prompt and refinement prompt.
+Loads in the env and API and then loads in the initial prompt and refinement prompt.
 Sets up the API and llm for 'gpt-4o'. Temperature is set to 0.2 to allow some paraphrasing
-but maintain certainty that LLM hallucinations do not occur.
+but reduces the chance of hallucinations.
 """
 
 load_dotenv()
